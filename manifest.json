@@ -2,8 +2,8 @@
   "author": "Josh Wowk",
   "id": "net.jwowk.icue.clickup",
   "name": "ClickUp Tasks",
-  "description": "Glanceable ClickUp task list for Xeneon Edge — My Day style dark theme with due-date chips, priority stars, and list labels. Connects directly to the ClickUp API with your personal token.",
-  "version": "1.0.0",
+  "description": "Glanceable ClickUp task list for Xeneon Edge — My Day style dark theme with due-date chips, priority stars, and list labels. Connects directly to the ClickUp API with your personal token. Interactive: tap a task for details, change its status, or tap the circle to complete it.",
+  "version": "1.1.0",
   "preview_icon": "resources/icon.png",
   "min_framework_version": "1.0.0",
   "os": [

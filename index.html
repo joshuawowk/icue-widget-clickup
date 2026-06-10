@@ -87,6 +87,32 @@
         <div class="task-list" id="taskList"></div>
         <div class="overflow-hint" id="overflowHint" style="display:none;"></div>
       </div>
+
+      <!-- Task details overlay -->
+      <div class="detail-view" style="display:none;">
+        <header class="detail-header">
+          <button class="back-btn" id="backBtn" type="button">
+            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg>
+            <span>Back</span>
+          </button>
+          <span class="detail-list-name" id="detailListName"></span>
+        </header>
+        <div class="detail-scroll">
+          <div class="detail-title" id="detailTitle"></div>
+          <div class="detail-meta" id="detailMeta"></div>
+          <div class="detail-desc" id="detailDesc"></div>
+          <div class="detail-section-label">Status</div>
+          <div class="detail-statuses" id="detailStatuses">
+            <div class="statuses-loading">Loading statuses…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div class="toast" id="toast" style="display:none;">
+        <span class="toast-text" id="toastText"></span>
+        <button class="toast-action" id="toastAction" type="button" style="display:none;">Undo</button>
+      </div>
     </div>
   </div>
 
@@ -178,11 +204,14 @@
       });
     }
 
+    let detailOpen = false;
+
     function showState(state) {
-      ['loading-state', 'error-state', 'setup-state', 'empty-state', 'content'].forEach(s => {
+      ['loading-state', 'error-state', 'setup-state', 'empty-state', 'content', 'detail-view'].forEach(s => {
         const el = document.querySelector('.' + s);
         if (el) el.style.display = s === state ? '' : 'none';
       });
+      detailOpen = state === 'detail-view';
     }
 
     /* ---------- ClickUp API ---------- */
@@ -191,9 +220,16 @@
     let lastGoodTasks = null;
     let refreshTimer = null;
     let fetchInFlight = false;
+    const listStatusCache = new Map();   // listId -> [{status, color, type}]
 
-    async function cuFetch(token, path) {
-      const res = await fetch(API + path, { headers: { 'Authorization': token } });
+    function cuHeaders(token, json) {
+      const h = { 'Authorization': token };
+      if (json) h['Content-Type'] = 'application/json';
+      return h;
+    }
+
+    async function cuFetch(token, path, options) {
+      const res = await fetch(API + path, Object.assign({ headers: cuHeaders(token, options && options.body) }, options || {}));
       if (!res.ok) {
         const err = new Error('HTTP ' + res.status);
         err.status = res.status;
@@ -215,6 +251,17 @@
       return cachedIdentity;
     }
 
+    async function getListStatuses(listId) {
+      if (listStatusCache.has(listId)) return listStatusCache.get(listId);
+      const token = getIcueProperty('apiToken');
+      const data = await cuFetch(token, '/list/' + encodeURIComponent(listId));
+      const statuses = (data.statuses || []).map(s => ({
+        status: s.status, color: s.color || '#888888', type: s.type
+      }));
+      listStatusCache.set(listId, statuses);
+      return statuses;
+    }
+
     function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
 
     function dueInfo(dueMs) {
@@ -232,7 +279,7 @@
 
     async function loadTasks() {
       const token = getIcueProperty('apiToken');
-      if (!token) { showState('setup-state'); return; }
+      if (!token) { if (!detailOpen) showState('setup-state'); return; }
       if (fetchInFlight) return;
       fetchInFlight = true;
       try {
@@ -256,12 +303,11 @@
         console.error('ClickUp fetch failed:', e);
         if (lastGoodTasks) {
           renderTasks(lastGoodTasks, true);
-        } else if (e.status === 401) {
+        } else if (!detailOpen) {
           showState('error-state');
-          document.querySelector('.error-detail').textContent = 'Invalid API token — check widget settings';
-        } else {
-          showState('error-state');
-          document.querySelector('.error-detail').textContent = 'Network error — retrying on next refresh';
+          document.querySelector('.error-detail').textContent = (e.status === 401)
+            ? 'Invalid API token — check widget settings'
+            : 'Network error — retrying on next refresh';
         }
       } finally {
         fetchInFlight = false;
@@ -269,22 +315,33 @@
     }
 
     function priorityRank(t) {
+      const map = { urgent: 0, high: 1, normal: 2, low: 3 };
       const p = t.priority && t.priority.priority;
-      return { urgent: 0, high: 1, normal: 2, low: 3 }[p] !== undefined ? { urgent: 0, high: 1, normal: 2, low: 3 }[p] : 4;
+      return map[p] !== undefined ? map[p] : 4;
+    }
+
+    function shapeTask(t) {
+      return {
+        id: t.id,
+        name: t.name,
+        listId: t.list && t.list.id,
+        listName: (t.list && t.list.name) || '',
+        due: dueInfo(t.due_date),
+        dueMs: t.due_date ? Number(t.due_date) : null,
+        prio: t.priority && t.priority.priority,
+        prioColor: t.priority && t.priority.color,
+        prioRank: priorityRank(t),
+        status: (t.status && t.status.status) || '',
+        statusColor: (t.status && t.status.color) || '#888888',
+        tags: (t.tags || []).map(x => x.name)
+      };
     }
 
     function renderTasks(tasks, offline) {
       const filter = getIcueProperty('dueFilter') || 'all';
       const max = clampRange(getIcueProperty('maxItems'), 3, 30, 12);
 
-      let shaped = tasks.map(t => ({
-        id: t.id,
-        name: t.name,
-        listName: (t.list && t.list.name) || '',
-        due: dueInfo(t.due_date),
-        prio: t.priority && t.priority.priority,
-        prioRank: priorityRank(t)
-      }));
+      let shaped = tasks.map(shapeTask);
 
       if (filter === 'today') shaped = shaped.filter(t => t.due && t.due.sort <= 0);
       if (filter === 'week') shaped = shaped.filter(t => t.due && t.due.sort <= 7);
@@ -305,16 +362,18 @@
       document.querySelector('.task-count').textContent = total;
       document.querySelector('.task-count-label').textContent = total === 1 ? 'task' : 'tasks';
 
-      if (total === 0) { showState('empty-state'); return; }
+      if (total === 0) { if (!detailOpen) showState('empty-state'); return; }
 
       const listEl = document.getElementById('taskList');
       listEl.innerHTML = '';
       visible.forEach(t => {
         const row = document.createElement('div');
         row.className = 'task-row';
+        row.dataset.taskId = t.id;
 
         const circle = document.createElement('span');
         circle.className = 'check-circle';
+        circle.title = 'Mark complete';
 
         const main = document.createElement('div');
         main.className = 'task-main';
@@ -345,6 +404,14 @@
         row.appendChild(circle);
         row.appendChild(main);
         row.appendChild(star);
+
+        // Interactions: circle = quick complete, anywhere else = details
+        circle.addEventListener('click', function (e) {
+          e.stopPropagation();
+          quickComplete(t, row);
+        });
+        row.addEventListener('click', function () { openDetails(t); });
+
         listEl.appendChild(row);
       });
 
@@ -356,8 +423,174 @@
         hint.style.display = 'none';
       }
 
-      showState('content');
+      if (!detailOpen) showState('content');
     }
+
+    /* ---------- Toast ---------- */
+    let toastTimer = null;
+    function showToast(text, actionLabel, onAction, ms) {
+      const toast = document.getElementById('toast');
+      const txt = document.getElementById('toastText');
+      const btn = document.getElementById('toastAction');
+      txt.textContent = text;
+      if (actionLabel && onAction) {
+        btn.textContent = actionLabel;
+        btn.style.display = '';
+        btn.onclick = function () { hideToast(); onAction(); };
+      } else {
+        btn.style.display = 'none';
+        btn.onclick = null;
+      }
+      toast.style.display = '';
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, ms || 3000);
+    }
+    function hideToast() {
+      document.getElementById('toast').style.display = 'none';
+      if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    }
+
+    /* ---------- Status changes ---------- */
+    async function setTaskStatus(taskId, statusName) {
+      const token = getIcueProperty('apiToken');
+      return cuFetch(token, '/task/' + encodeURIComponent(taskId), {
+        method: 'PUT',
+        body: JSON.stringify({ status: statusName })
+      });
+    }
+
+    function findClosedStatus(statuses) {
+      return statuses.find(s => s.type === 'closed') ||
+             statuses.find(s => s.type === 'done') ||
+             statuses.find(s => /^(complete|done|closed)$/i.test(s.status)) || null;
+    }
+
+    function quickComplete(task, row) {
+      if (row.classList.contains('completing')) return; // already pending
+      row.classList.add('completing');
+      let cancelled = false;
+
+      showToast('Completing "' + task.name.slice(0, 40) + (task.name.length > 40 ? '…' : '') + '"', 'Undo', function () {
+        cancelled = true;
+        row.classList.remove('completing');
+      }, 3000);
+
+      setTimeout(async function () {
+        if (cancelled) return;
+        try {
+          const statuses = await getListStatuses(task.listId);
+          const closed = findClosedStatus(statuses);
+          if (!closed) throw new Error('No closed status on list');
+          await setTaskStatus(task.id, closed.status);
+          row.classList.add('completed-gone');
+          setTimeout(loadTasks, 450);
+        } catch (e) {
+          console.error('Complete failed:', e);
+          row.classList.remove('completing');
+          showToast('Could not complete task — try again', null, null, 4000);
+        }
+      }, 3000);
+    }
+
+    /* ---------- Details view ---------- */
+    let detailTask = null;
+
+    function fmtFullDue(ms) {
+      if (!ms) return null;
+      return new Date(ms).toLocaleDateString(languageCode, { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    async function openDetails(task) {
+      detailTask = task;
+      document.getElementById('detailListName').textContent = task.listName || '';
+      document.getElementById('detailTitle').textContent = task.name;
+
+      const meta = document.getElementById('detailMeta');
+      meta.innerHTML = '';
+      if (task.due) {
+        const chip = document.createElement('span');
+        chip.className = 'due-chip due-' + task.due.cls;
+        chip.textContent = task.due.label + (task.dueMs && task.due.cls !== 'overdue' && task.due.cls !== 'today'
+          ? '' : (task.dueMs ? ' • ' + fmtFullDue(task.dueMs) : ''));
+        meta.appendChild(chip);
+      }
+      if (task.prio) {
+        const p = document.createElement('span');
+        p.className = 'prio-badge';
+        p.textContent = task.prio.toUpperCase();
+        if (task.prioColor) p.style.color = task.prioColor;
+        meta.appendChild(p);
+      }
+      task.tags.forEach(tag => {
+        const tg = document.createElement('span');
+        tg.className = 'tag-badge';
+        tg.textContent = tag;
+        meta.appendChild(tg);
+      });
+
+      document.getElementById('detailDesc').textContent = '';
+      const stWrap = document.getElementById('detailStatuses');
+      stWrap.innerHTML = '<div class="statuses-loading">Loading statuses…</div>';
+      showState('detail-view');
+
+      const token = getIcueProperty('apiToken');
+
+      // Description (best-effort) + statuses in parallel
+      cuFetch(token, '/task/' + encodeURIComponent(task.id)).then(full => {
+        const desc = (full.text_content || full.description || '').trim();
+        document.getElementById('detailDesc').textContent = desc ? desc.slice(0, 600) : '';
+      }).catch(() => {});
+
+      try {
+        const statuses = await getListStatuses(task.listId);
+        renderStatusButtons(statuses, task);
+      } catch (e) {
+        stWrap.innerHTML = '<div class="statuses-loading">Could not load statuses</div>';
+      }
+    }
+
+    function renderStatusButtons(statuses, task) {
+      const wrap = document.getElementById('detailStatuses');
+      wrap.innerHTML = '';
+      statuses.forEach(s => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'status-pill' + (s.status.toLowerCase() === task.status.toLowerCase() ? ' current' : '');
+        btn.style.setProperty('--pill-color', s.color);
+        const dot = document.createElement('span');
+        dot.className = 'pill-dot';
+        const label = document.createElement('span');
+        label.textContent = s.status.toUpperCase();
+        btn.appendChild(dot);
+        btn.appendChild(label);
+        btn.addEventListener('click', async function () {
+          if (btn.classList.contains('current') || wrap.classList.contains('busy')) return;
+          wrap.classList.add('busy');
+          btn.classList.add('saving');
+          try {
+            await setTaskStatus(task.id, s.status);
+            task.status = s.status;
+            wrap.querySelectorAll('.status-pill').forEach(b => b.classList.remove('current'));
+            btn.classList.add('current');
+            showToast('Status → ' + s.status.toUpperCase(), null, null, 2200);
+            loadTasks();
+          } catch (e) {
+            console.error('Status change failed:', e);
+            showToast('Could not change status — try again', null, null, 4000);
+          } finally {
+            btn.classList.remove('saving');
+            wrap.classList.remove('busy');
+          }
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    document.getElementById('backBtn').addEventListener('click', function () {
+      detailTask = null;
+      showState('content');
+      loadTasks();
+    });
 
     /* ---------- Lifecycle ---------- */
     function scheduleRefresh() {

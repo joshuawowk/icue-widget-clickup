@@ -7,6 +7,10 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
 ## Features
 
 - **Direct ClickUp API connection** — no companion service needed; just your personal API token
+- **Interactive (touch)**:
+  - Tap a task → details view with description, due date, priority, tags, and the list's status pills — tap a pill to change the task's status (PUT to ClickUp)
+  - Tap a task's circle → quick-complete with a 3-second **Undo** toast before it commits
+  - Task list scrolls by touch when it overflows
 - **My Tasks mode** (default): every open task assigned to you across the workspace, ordered by due date then priority
 - **List mode**: point it at a single ClickUp list via List ID
 - **Due filters**: all open tasks, due today + overdue, or due this week
@@ -60,12 +64,12 @@ Copy this folder into your iCUE widgets directory and restart iCUE.
 
 ## Privacy
 
-The widget talks **only** to `https://api.clickup.com` over HTTPS using your token. No other endpoints, no analytics, no storage outside iCUE widget settings.
+The widget talks **only** to `https://api.clickup.com` over HTTPS using your token (GET for reading, PUT only when you change a status). No other endpoints, no analytics, no storage outside iCUE widget settings.
 
 ## Roadmap
 
-- Tap a task to mark it complete (needs a small write-proxy; ClickUp's browser CORS policy only allows GET)
 - Tag/space filters
+- Create task from the widget
 
 ## License
 
