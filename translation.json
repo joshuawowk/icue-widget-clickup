@@ -1,0 +1,20 @@
+{
+  "ClickUp Tasks": "ClickUp Tasks",
+  "Productivity": "Productivity",
+  "ClickUp API Token": "ClickUp API Token",
+  "List ID (optional, blank = all my tasks)": "List ID (optional, blank = all my tasks)",
+  "Title": "Title",
+  "Show": "Show",
+  "All open tasks": "All open tasks",
+  "Due today + overdue": "Due today + overdue",
+  "Due this week": "Due this week",
+  "Max Tasks": "Max Tasks",
+  "Refresh Interval": "Refresh Interval",
+  "Text Color": "Text Color",
+  "Accent Color": "Accent Color",
+  "Background Color": "Background Color",
+  "Background Image": "Background Image",
+  "Glass Blur": "Glass Blur",
+  "Background Transparency": "Background Transparency",
+  "Widget Personalization": "Widget Personalization"
+}
