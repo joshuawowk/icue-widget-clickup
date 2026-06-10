@@ -7,11 +7,17 @@
   "preview_icon": "resources/icon.png",
   "min_framework_version": "1.0.0",
   "os": [
-    { "platform": "windows" },
-    { "platform": "mac" }
+    {
+      "platform": "windows"
+    }
   ],
   "supported_devices": [
-    { "type": "dashboard_lcd", "features": ["sensor-screen"] }
+    {
+      "type": "dashboard_lcd",
+      "features": [
+        "sensor-screen"
+      ]
+    }
   ],
   "interactive": true
 }
