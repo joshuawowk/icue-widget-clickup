@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tr('ClickUp Tasks')</title>
+  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
+
+  <meta name="x-icue-restrictions" data-restrictions='[{ "device": "dashboard_lcd" }]'>
+  <meta name="x-icue-widget-group" content="tr('Productivity')">
+
+  <!-- MediaViewer for background image support -->
+  <script type="text/javascript" src="../common/tools/media_viewer/MediaViewer.js"></script>
+  <link rel="stylesheet" type="text/css" href="../common/tools/media_viewer/MediaViewer.css">
+
+  <!-- Feature properties -->
+  <meta name="x-icue-property" content="apiToken" data-label="tr('ClickUp API Token')" data-type="textfield" data-default="''">
+  <meta name="x-icue-property" content="listId" data-label="tr('List ID (optional, blank = all my tasks)')" data-type="textfield" data-default="''">
+  <meta name="x-icue-property" content="widgetTitle" data-label="tr('Title')" data-type="textfield" data-default="'My Tasks'">
+  <meta name="x-icue-property" content="dueFilter" data-label="tr('Show')" data-type="combobox" data-default="'all'"
+        data-values="[{'key':'all','value':tr('All open tasks')},{'key':'today','value':tr('Due today + overdue')},{'key':'week','value':tr('Due this week')}]">
+  <meta name="x-icue-property" content="maxItems" data-label="tr('Max Tasks')" data-type="slider" data-default="12" data-min="3" data-max="30" data-step="1">
+  <meta name="x-icue-property" content="refreshMinutes" data-label="tr('Refresh Interval')" data-type="slider" data-default="5" data-min="1" data-max="30" data-step="1" data-unit-label="'min'">
+
+  <!-- Widget Personalization -->
+  <meta name="x-icue-property" content="textColor" data-label="tr('Text Color')" data-type="color" data-default="'#ffffff'">
+  <meta name="x-icue-property" content="accentColor" data-label="tr('Accent Color')" data-type="color" data-default="'#9f8fff'">
+  <meta name="x-icue-property" content="backgroundColor" data-label="tr('Background Color')" data-type="color" data-default="'#15161c'">
+  <meta name="x-icue-property" content="backgroundMedia" data-label="tr('Background Image')" data-type="media-selector" data-filters="['*.png','*.jpg','*.jpeg','*.webp']">
+  <meta name="x-icue-property" content="glassBlur" data-label="tr('Glass Blur')" data-type="slider" data-default="0" data-min="0" data-max="30" data-step="1">
+  <meta name="x-icue-property" content="transparency" data-label="tr('Background Transparency')" data-type="slider" data-default="100" data-min="0" data-max="100" data-step="1" data-unit-label="'%'">
+
+  <script id="x-icue-groups" type="application/json">
+  [
+    { "title": "tr('ClickUp Tasks')", "properties": ["apiToken", "listId", "widgetTitle", "dueFilter", "maxItems", "refreshMinutes"] },
+    { "title": "tr('Widget Personalization')", "properties": ["textColor", "accentColor", "backgroundColor", "backgroundMedia", "glassBlur", "transparency"] }
+  ]
+  </script>
+
+  <link rel="stylesheet" type="text/css" href="styles/ClickUpTasks.css">
+</head>
+<body>
+  <div class="widget-root">
+    <div class="widget-background" aria-hidden="true">
+      <div class="main-glass"></div>
+      <div id="media-background"></div>
+    </div>
+
+    <div class="main-content">
+      <div class="loading-state state-panel">
+        <div class="spinner"></div>
+        <div class="state-text">Loading tasks…</div>
+      </div>
+
+      <div class="error-state state-panel" style="display:none;">
+        <svg class="state-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 1 21h22L12 2zm0 6c.6 0 1 .4 1 1v5a1 1 0 0 1-2 0V9c0-.6.4-1 1-1zm0 9.2a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4z"/></svg>
+        <div class="state-text error-text">Unable to load tasks</div>
+        <div class="state-sub error-detail"></div>
+      </div>
+
+      <div class="setup-state state-panel" style="display:none;">
+        <svg class="state-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 .1-1l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.5 7.5 0 0 0-1.7-1L14.6 3a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.5a7.5 7.5 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.8 9a.5.5 0 0 0 .1.6l2 1.6a7.6 7.6 0 0 0 0 2L2.9 14.7a.5.5 0 0 0-.1.6l1.9 3.3c.1.2.4.3.6.2l2.4-1a7.5 7.5 0 0 0 1.7 1l.4 2.5c0 .3.3.4.5.4h3.8c.2 0 .5-.2.5-.4l.4-2.5a7.5 7.5 0 0 0 1.7-1l2.4 1c.2.1.5 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6l-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        <div class="state-text">Add your ClickUp API token</div>
+        <div class="state-sub">Widget settings &rarr; ClickUp API Token<br>(ClickUp &rarr; Settings &rarr; Apps &rarr; API Token)</div>
+      </div>
+
+      <div class="empty-state state-panel" style="display:none;">
+        <svg class="state-icon ok" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.4-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z"/></svg>
+        <div class="state-text">All clear</div>
+        <div class="state-sub">No matching tasks</div>
+      </div>
+
+      <div class="content" style="display:none;">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="title-row">
+              <span class="widget-title">My Tasks</span>
+              <svg class="chevron" viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+            </div>
+            <div class="subtitle">ClickUp</div>
+          </div>
+          <div class="topbar-right">
+            <div class="task-count hero-value">0</div>
+            <div class="task-count-label">open</div>
+          </div>
+        </header>
+        <div class="task-list" id="taskList"></div>
+        <div class="overflow-hint" id="overflowHint" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    icueEvents = {
+      'onDataUpdated': onIcueDataUpdated,
+      'onICUEInitialized': onIcueInitialized,
+      'onUpdateRequested': onUpdateRequested
+    };
+
+    let languageCode = 'en';
+
+    function getIcueProperty(name) {
+      if (typeof window !== 'undefined' && Object.prototype.hasOwnProperty.call(window, name)) {
+        const value = window[name];
+        if (value !== undefined && value !== null && value !== '') return value;
+      }
+      try {
+        const value = Function('return typeof ' + name + ' !== "undefined" ? ' + name + ' : undefined')();
+        if (value !== undefined && value !== null && value !== '') return value;
+      } catch (e) {}
+      return undefined;
+    }
+
+    function clampRange(v, min, max, d) {
+      v = Number(v);
+      if (!Number.isFinite(v)) return d;
+      return Math.max(min, Math.min(max, v));
+    }
+
+    /* ---------- Media background ---------- */
+    const mediaMount = document.getElementById('media-background');
+
+    function createMediaBackgroundComponent(container) {
+      if (!container) return { clear: function () {}, loadMedia: function () {} };
+      if (typeof MediaViewer === 'function') {
+        const viewer = new MediaViewer({
+          container: container,
+          onMediaLoaded: function () { container.classList.add('has-media'); },
+          onMediaError: function (err) {
+            container.classList.remove('has-media');
+            console.error('Media background error:', err);
+          }
+        });
+        return {
+          clear: function () { viewer.clear(); container.classList.remove('has-media'); },
+          loadMedia: function (config) { viewer.loadMedia(config); }
+        };
+      }
+      return {
+        clear: function () {
+          container.style.backgroundImage = '';
+          container.classList.remove('has-media');
+        },
+        loadMedia: function (config) {
+          const p = config && (config.path || config.pathToAsset);
+          if (!p) { this.clear(); return; }
+          container.style.backgroundImage = "url('" + p + "')";
+          container.style.backgroundRepeat = 'no-repeat';
+          container.style.backgroundPosition = 'center';
+          container.style.backgroundSize = 'cover';
+          container.classList.add('has-media');
+        }
+      };
+    }
+    const mediaBackgroundComponent = createMediaBackgroundComponent(mediaMount);
+
+    function applyStyles() {
+      const root = document.documentElement;
+      root.style.setProperty('--bg-opacity', clampRange(getIcueProperty('transparency'), 0, 100, 100) / 100);
+      const tc = getIcueProperty('textColor');
+      const ac = getIcueProperty('accentColor');
+      const bgc = getIcueProperty('backgroundColor');
+      root.style.setProperty('--text-color', (typeof tc === 'string' && tc) ? tc : '#ffffff');
+      root.style.setProperty('--accent-color', (typeof ac === 'string' && ac) ? ac : '#9f8fff');
+      root.style.setProperty('--bg-color', (typeof bgc === 'string' && bgc) ? bgc : '#15161c');
+      root.style.setProperty('--bg-blur', clampRange(getIcueProperty('glassBlur'), 0, 30, 0) + 'px');
+
+      const bgMedia = getIcueProperty('backgroundMedia');
+      if (!bgMedia) { mediaBackgroundComponent.clear(); return; }
+      mediaBackgroundComponent.loadMedia({
+        path: bgMedia.pathToAsset,
+        baseWidth: bgMedia.baseWidth,
+        baseHeight: bgMedia.baseHeight,
+        scale: typeof bgMedia === 'object' ? bgMedia.scale : undefined,
+        positionX: typeof bgMedia === 'object' ? bgMedia.positionX : undefined,
+        positionY: typeof bgMedia === 'object' ? bgMedia.positionY : undefined,
+        angle: typeof bgMedia === 'object' ? bgMedia.angle : undefined
+      });
+    }
+
+    function showState(state) {
+      ['loading-state', 'error-state', 'setup-state', 'empty-state', 'content'].forEach(s => {
+        const el = document.querySelector('.' + s);
+        if (el) el.style.display = s === state ? '' : 'none';
+      });
+    }
+
+    /* ---------- ClickUp API ---------- */
+    const API = 'https://api.clickup.com/api/v2';
+    let cachedIdentity = null;   // { token, userId, teamId, teamName }
+    let lastGoodTasks = null;
+    let refreshTimer = null;
+    let fetchInFlight = false;
+
+    async function cuFetch(token, path) {
+      const res = await fetch(API + path, { headers: { 'Authorization': token } });
+      if (!res.ok) {
+        const err = new Error('HTTP ' + res.status);
+        err.status = res.status;
+        throw err;
+      }
+      return res.json();
+    }
+
+    async function resolveIdentity(token) {
+      if (cachedIdentity && cachedIdentity.token === token) return cachedIdentity;
+      const [user, teams] = await Promise.all([cuFetch(token, '/user'), cuFetch(token, '/team')]);
+      const team = (teams.teams && teams.teams[0]) || null;
+      cachedIdentity = {
+        token: token,
+        userId: user.user && user.user.id,
+        teamId: team && team.id,
+        teamName: (team && team.name) || 'ClickUp'
+      };
+      return cachedIdentity;
+    }
+
+    function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+
+    function dueInfo(dueMs) {
+      if (!dueMs) return null;
+      const due = new Date(Number(dueMs));
+      const today = startOfDay(new Date());
+      const dueDay = startOfDay(due);
+      const diffDays = Math.round((dueDay - today) / 86400000);
+      if (diffDays < 0) return { cls: 'overdue', label: 'Overdue', sort: -1 + diffDays / 10000 };
+      if (diffDays === 0) return { cls: 'today', label: 'Today', sort: 0 };
+      if (diffDays === 1) return { cls: 'soon', label: 'Tomorrow', sort: 1 };
+      const label = due.toLocaleDateString(languageCode, { month: 'short', day: 'numeric' });
+      return { cls: diffDays <= 7 ? 'soon' : 'later', label: label, sort: diffDays };
+    }
+
+    async function loadTasks() {
+      const token = getIcueProperty('apiToken');
+      if (!token) { showState('setup-state'); return; }
+      if (fetchInFlight) return;
+      fetchInFlight = true;
+      try {
+        const listIdSetting = (getIcueProperty('listId') || '').toString().trim();
+        let tasks = [];
+        if (listIdSetting) {
+          const data = await cuFetch(token, '/list/' + encodeURIComponent(listIdSetting) +
+            '/task?include_closed=false&subtasks=false');
+          tasks = data.tasks || [];
+          const id = await resolveIdentity(token).catch(() => null);
+          if (id) cachedIdentity = id;
+        } else {
+          const id = await resolveIdentity(token);
+          const data = await cuFetch(token, '/team/' + id.teamId +
+            '/task?assignees[]=' + id.userId + '&include_closed=false&subtasks=false&order_by=due_date');
+          tasks = data.tasks || [];
+        }
+        lastGoodTasks = tasks;
+        renderTasks(tasks, false);
+      } catch (e) {
+        console.error('ClickUp fetch failed:', e);
+        if (lastGoodTasks) {
+          renderTasks(lastGoodTasks, true);
+        } else if (e.status === 401) {
+          showState('error-state');
+          document.querySelector('.error-detail').textContent = 'Invalid API token — check widget settings';
+        } else {
+          showState('error-state');
+          document.querySelector('.error-detail').textContent = 'Network error — retrying on next refresh';
+        }
+      } finally {
+        fetchInFlight = false;
+      }
+    }
+
+    function priorityRank(t) {
+      const p = t.priority && t.priority.priority;
+      return { urgent: 0, high: 1, normal: 2, low: 3 }[p] !== undefined ? { urgent: 0, high: 1, normal: 2, low: 3 }[p] : 4;
+    }
+
+    function renderTasks(tasks, offline) {
+      const filter = getIcueProperty('dueFilter') || 'all';
+      const max = clampRange(getIcueProperty('maxItems'), 3, 30, 12);
+
+      let shaped = tasks.map(t => ({
+        id: t.id,
+        name: t.name,
+        listName: (t.list && t.list.name) || '',
+        due: dueInfo(t.due_date),
+        prio: t.priority && t.priority.priority,
+        prioRank: priorityRank(t)
+      }));
+
+      if (filter === 'today') shaped = shaped.filter(t => t.due && t.due.sort <= 0);
+      if (filter === 'week') shaped = shaped.filter(t => t.due && t.due.sort <= 7);
+
+      shaped.sort((a, b) => {
+        const as = a.due ? a.due.sort : 9999;
+        const bs = b.due ? b.due.sort : 9999;
+        if (as !== bs) return as - bs;
+        return a.prioRank - b.prioRank;
+      });
+
+      const total = shaped.length;
+      const visible = shaped.slice(0, max);
+
+      document.querySelector('.widget-title').textContent = getIcueProperty('widgetTitle') || 'My Tasks';
+      document.querySelector('.subtitle').textContent =
+        (cachedIdentity ? cachedIdentity.teamName : 'ClickUp') + (offline ? ' • offline' : '');
+      document.querySelector('.task-count').textContent = total;
+      document.querySelector('.task-count-label').textContent = total === 1 ? 'task' : 'tasks';
+
+      if (total === 0) { showState('empty-state'); return; }
+
+      const listEl = document.getElementById('taskList');
+      listEl.innerHTML = '';
+      visible.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'task-row';
+
+        const circle = document.createElement('span');
+        circle.className = 'check-circle';
+
+        const main = document.createElement('div');
+        main.className = 'task-main';
+        const name = document.createElement('div');
+        name.className = 'task-name';
+        name.textContent = t.name;
+        const meta = document.createElement('div');
+        meta.className = 'task-meta';
+        if (t.listName) {
+          const ln = document.createElement('span');
+          ln.className = 'task-list-name';
+          ln.textContent = t.listName;
+          meta.appendChild(ln);
+        }
+        if (t.due) {
+          const chip = document.createElement('span');
+          chip.className = 'due-chip due-' + t.due.cls;
+          chip.textContent = t.due.label;
+          meta.appendChild(chip);
+        }
+        main.appendChild(name);
+        main.appendChild(meta);
+
+        const star = document.createElement('span');
+        star.className = 'prio-star' + ((t.prio === 'urgent' || t.prio === 'high') ? ' prio-on' : '');
+        star.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 17.3 6.2 20.6l1.5-6.5-5-4.4 6.6-.6L12 3l2.7 6.1 6.6.6-5 4.4 1.5 6.5z"/></svg>';
+
+        row.appendChild(circle);
+        row.appendChild(main);
+        row.appendChild(star);
+        listEl.appendChild(row);
+      });
+
+      const hint = document.getElementById('overflowHint');
+      if (total > visible.length) {
+        hint.textContent = '+' + (total - visible.length) + ' more';
+        hint.style.display = '';
+      } else {
+        hint.style.display = 'none';
+      }
+
+      showState('content');
+    }
+
+    /* ---------- Lifecycle ---------- */
+    function scheduleRefresh() {
+      if (refreshTimer) clearInterval(refreshTimer);
+      const mins = clampRange(getIcueProperty('refreshMinutes'), 1, 30, 5);
+      refreshTimer = setInterval(loadTasks, mins * 60000);
+    }
+
+    function onUpdateRequested() { loadTasks(); }
+
+    function onIcueDataUpdated() {
+      applyStyles();
+      scheduleRefresh();
+      loadTasks();
+    }
+
+    function onIcueInitialized() {
+      if (typeof iCUE !== 'undefined' && iCUE.iCUELanguage) languageCode = iCUE.iCUELanguage;
+      onIcueDataUpdated();
+    }
+
+    if (typeof iCUE_initialized !== 'undefined' && iCUE_initialized) {
+      onIcueInitialized();
+    } else {
+      onIcueDataUpdated();
+    }
+  </script>
+</body>
+</html>

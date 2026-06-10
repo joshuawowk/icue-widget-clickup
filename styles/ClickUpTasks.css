@@ -1,0 +1,319 @@
+/* ClickUp Tasks — Xeneon Edge widget
+   Dark "My Day" aesthetic: circular checkboxes, due chips, priority stars. */
+
+:root {
+  --text-color: #ffffff;
+  --accent-color: #9f8fff;
+  --bg-color: #15161c;
+  --bg-opacity: 1;
+  --bg-blur: 0px;
+
+  /* Sizing architecture: single baseline, semantic tokens */
+  --layout-unit: 1vmin;
+  --device-vertical-s-unit: 4.16px;                 /* 416px / 100 */
+  --preview-vertical-s-unit: calc(100vw * 416 / 69600);
+
+  --space-gap: calc(var(--layout-unit) * 2.2);
+  --space-pad: calc(var(--layout-unit) * 4.5);
+  --radius-card: calc(var(--layout-unit) * 2.5);
+
+  --font-hero: calc(var(--layout-unit) * 12);
+  --font-title: calc(var(--layout-unit) * 5.2);
+  --font-task: calc(var(--layout-unit) * 4.1);
+  --font-meta: calc(var(--layout-unit) * 3.1);
+  --font-label: calc(var(--layout-unit) * 3);
+
+  --row-pad-v: calc(var(--layout-unit) * 2.6);
+  --circle-size: calc(var(--layout-unit) * 4.6);
+  --star-size: calc(var(--layout-unit) * 4.2);
+}
+
+html { overflow: hidden; }
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  font-family: OpenSans, "Segoe UI", Arial, sans-serif;
+  background: transparent;
+}
+
+.widget-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  color: var(--text-color);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* ---------- Background stack ---------- */
+.widget-background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  opacity: var(--bg-opacity);
+  transition: opacity 0.2s ease;
+}
+.main-glass {
+  position: absolute;
+  inset: 0;
+  background-color: var(--bg-color);
+  z-index: 0;
+}
+#media-background {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  filter: blur(var(--bg-blur));
+}
+
+.main-content {
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-pad) calc(var(--space-pad) * 1.3);
+}
+
+/* ---------- States ---------- */
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--layout-unit) * 2);
+  height: 100%;
+  text-align: center;
+}
+.state-icon {
+  width: calc(var(--layout-unit) * 11);
+  height: calc(var(--layout-unit) * 11);
+  color: var(--accent-color);
+  opacity: 0.9;
+}
+.state-icon.ok { color: #4ade80; }
+.state-text { font-size: var(--font-title); font-weight: 600; }
+.state-sub  { font-size: var(--font-meta); opacity: 0.6; line-height: 1.5; }
+.error-text { color: #f87171; }
+
+.spinner {
+  width: calc(var(--layout-unit) * 9);
+  height: calc(var(--layout-unit) * 9);
+  border: calc(var(--layout-unit) * 0.9) solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Top bar ---------- */
+.content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  padding-bottom: calc(var(--layout-unit) * 2);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-color) 10%, transparent);
+}
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--layout-unit) * 1);
+}
+.widget-title {
+  font-size: var(--font-title);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.chevron {
+  width: calc(var(--layout-unit) * 4.5);
+  height: calc(var(--layout-unit) * 4.5);
+  color: var(--accent-color);
+}
+.subtitle {
+  font-size: var(--font-meta);
+  opacity: 0.55;
+  margin-top: calc(var(--layout-unit) * 0.6);
+}
+.topbar-right {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--layout-unit) * 1.4);
+}
+.hero-value {
+  font-size: var(--font-hero);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--accent-color);
+}
+.task-count-label {
+  font-size: var(--font-label);
+  opacity: 0.55;
+}
+
+/* ---------- Task list ---------- */
+.task-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  margin-top: calc(var(--layout-unit) * 1);
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--layout-unit) * 3);
+  padding: var(--row-pad-v) calc(var(--layout-unit) * 1);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-color) 7%, transparent);
+  break-inside: avoid;
+}
+.task-row:last-child { border-bottom: none; }
+
+.check-circle {
+  flex: 0 0 auto;
+  width: var(--circle-size);
+  height: var(--circle-size);
+  border: calc(var(--layout-unit) * 0.45) solid var(--accent-color);
+  border-radius: 50%;
+  box-sizing: border-box;
+  opacity: 0.9;
+}
+
+.task-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.task-name {
+  font-size: var(--font-task);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--layout-unit) * 2);
+  margin-top: calc(var(--layout-unit) * 0.7);
+  font-size: var(--font-meta);
+  opacity: 0.85;
+}
+.task-list-name {
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.due-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--layout-unit) * 0.8);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.due-chip::before {
+  content: "";
+  width: calc(var(--layout-unit) * 2.4);
+  height: calc(var(--layout-unit) * 2.4);
+  border-radius: calc(var(--layout-unit) * 0.5);
+  background: currentColor;
+  opacity: 0.85;
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V10h14v10z"/></svg>') center / contain no-repeat;
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H5V10h14v10z"/></svg>') center / contain no-repeat;
+}
+.due-overdue { color: #f87171; }
+.due-today   { color: #fb7185; }
+.due-soon    { color: #fbbf24; }
+.due-later   { color: var(--text-color); opacity: 0.6; }
+
+.prio-star {
+  flex: 0 0 auto;
+  width: var(--star-size);
+  height: var(--star-size);
+  opacity: 0.35;
+}
+.prio-star svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--accent-color);
+  stroke-width: 1.6;
+}
+.prio-star.prio-on { opacity: 1; }
+.prio-star.prio-on svg { fill: var(--accent-color); stroke: var(--accent-color); }
+
+.overflow-hint {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: var(--font-label);
+  opacity: 0.5;
+  padding-top: calc(var(--layout-unit) * 1.2);
+}
+
+/* =========================================================
+   Responsive layouts — aspect-ratio media queries only
+   ========================================================= */
+
+/* Vertical device slots: pin baseline to S-vertical (696x416 canonical) */
+@media (min-width: 680px) and (max-width: 712px) and (min-height: 416px) {
+  :root { --layout-unit: var(--device-vertical-s-unit); }
+}
+/* Vertical preview cards */
+@media (min-width: 180px) and (max-width: 360px) and (max-aspect-ratio: 0.9) {
+  :root { --layout-unit: var(--preview-vertical-s-unit); }
+}
+
+/* Short wide landscape — S-H (840x344): compact header, tighter rows */
+@media (min-aspect-ratio: 2.2) and (max-height: 400px) {
+  :root {
+    --font-hero: calc(var(--layout-unit) * 10);
+    --row-pad-v: calc(var(--layout-unit) * 1.9);
+  }
+  .subtitle { display: none; }
+  .task-meta { margin-top: calc(var(--layout-unit) * 0.4); }
+}
+
+/* Wide landscape — L-H (1688x696): two columns */
+@media (min-aspect-ratio: 2.2) and (min-height: 401px) {
+  .task-list {
+    column-count: 2;
+    column-gap: calc(var(--layout-unit) * 8);
+    column-rule: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+  }
+}
+
+/* Very wide — XL-H (2536x696): three columns */
+@media (min-aspect-ratio: 3.2) {
+  .task-list { column-count: 3; }
+}
+
+/* Tall portrait — L-V / XL-V: constrain content width, center */
+@media (max-aspect-ratio: 0.5) {
+  .main-content {
+    max-width: 92vw;
+    margin: 0 auto;
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
