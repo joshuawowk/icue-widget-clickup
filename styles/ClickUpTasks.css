@@ -211,7 +211,7 @@ body {
 .filter-chips {
   display: flex;
   align-items: center;
-  gap: calc(var(--layout-unit) * 1.6);
+  gap: calc(var(--layout-unit) * 1.9);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
@@ -225,13 +225,13 @@ body {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: calc(var(--layout-unit) * 1.1);
+  gap: calc(var(--layout-unit) * 1);
   background: color-mix(in srgb, var(--text-color) 6%, transparent);
   border: calc(var(--layout-unit) * 0.35) solid color-mix(in srgb, var(--text-color) 12%, transparent);
   color: var(--text-color);
   border-radius: calc(var(--layout-unit) * 5);
-  padding: calc(var(--layout-unit) * 1.1) calc(var(--layout-unit) * 2.4);
-  font-size: var(--font-meta);
+  padding: calc(var(--layout-unit) * 1) calc(var(--layout-unit) * 2.15);
+  font-size: calc(var(--layout-unit) * 2.8);
   font-weight: 600;
   font-family: inherit;
   white-space: nowrap;
@@ -241,8 +241,8 @@ body {
 }
 .filter-chip:active { transform: scale(0.94); }
 .filter-chip .chip-dot {
-  width: calc(var(--layout-unit) * 2);
-  height: calc(var(--layout-unit) * 2);
+  width: calc(var(--layout-unit) * 1.8);
+  height: calc(var(--layout-unit) * 1.8);
   border-radius: 50%;
   background: var(--chip-color);
   flex: 0 0 auto;

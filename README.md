@@ -16,8 +16,8 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
 - **List mode**: point it at a single ClickUp list via List ID
 - **Filters**:
   - **Due**: all open tasks, due today + overdue, or due this week
-  - **Priority**: in-widget multi-select chips (Urgent / High / Normal / Low / None), seeded by a **Priority (default)** setting (All / Urgent only / High & up / Normal & up)
-  - **Status**: in-widget multi-select chips built from your tasks' actual statuses, seeded by a **Status (default)** setting (All / Not started / In progress / Not done, by ClickUp status type)
+  - **Priority**: in-widget multi-select chips (Urgent / High / Normal / Low / None), seeded by a **Priority (default)** setting (All / Urgent only / High and up / Normal and up)
+  - **Status**: in-widget multi-select chips built from your tasks' actual statuses. In **List mode** the chips follow the list's configured status order. A **Default Status** setting (a status name, e.g. `In-Progress`; blank = all) chooses which chips start selected
   - Chips are independent toggles — selecting none *or* all of a row means "show everything" for that row; an accent dot by the header shows when a filter is narrowing the list
 - **Due chips**: red *Overdue*, pink *Today*, amber *Tomorrow / this week*, muted dates beyond
 - **Priority stars**: filled accent star for `urgent` / `high` tasks
@@ -54,8 +54,8 @@ Copy this folder into your iCUE widgets directory and restart iCUE.
 | List ID | text | empty | Blank = all tasks assigned to you |
 | Title | text | `My Tasks` | Header label |
 | Show | dropdown | All open tasks | All / Due today + overdue / Due this week |
-| Priority (default) | dropdown | All priorities | Seeds the priority chips: All / Urgent only / High & up / Normal & up |
-| Status (default) | dropdown | All statuses | Seeds the status chips by type: All / Not started / In progress / Not done |
+| Priority (default) | dropdown | All priorities | Seeds the priority chips: All / Urgent only / High and up / Normal and up |
+| Default Status (blank = all) | text | `In-Progress` | Status name(s) to pre-select (comma-separated). Blank or no match = all selected |
 | Max Tasks | slider | 12 | 3–30 |
 | Refresh Interval | slider | 5 min | 1–30 min |
 | Text / Accent / Background Color | color | white / `#9f8fff` / `#15161c` | |

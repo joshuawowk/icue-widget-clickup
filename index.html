@@ -20,9 +20,8 @@
   <meta name="x-icue-property" content="dueFilter" data-label="tr('Show')" data-type="combobox" data-default="'all'"
         data-values="[{'key':'all','value':tr('All open tasks')},{'key':'today','value':tr('Due today + overdue')},{'key':'week','value':tr('Due this week')}]">
   <meta name="x-icue-property" content="priorityFilter" data-label="tr('Priority (default)')" data-type="combobox" data-default="'all'"
-        data-values="[{'key':'all','value':tr('All priorities')},{'key':'urgent','value':tr('Urgent only')},{'key':'high','value':tr('High & up')},{'key':'normal','value':tr('Normal & up')}]">
-  <meta name="x-icue-property" content="statusFilter" data-label="tr('Status (default)')" data-type="combobox" data-default="'all'"
-        data-values="[{'key':'all','value':tr('All statuses')},{'key':'open','value':tr('Not started')},{'key':'active','value':tr('In progress')},{'key':'notdone','value':tr('Not done')}]">
+        data-values="[{'key':'all','value':tr('All priorities')},{'key':'urgent','value':tr('Urgent only')},{'key':'high','value':tr('High and up')},{'key':'normal','value':tr('Normal and up')}]">
+  <meta name="x-icue-property" content="statusDefault" data-label="tr('Default Status (blank = all)')" data-type="textfield" data-default="'In-Progress'">
   <meta name="x-icue-property" content="maxItems" data-label="tr('Max Tasks')" data-type="slider" data-default="12" data-min="3" data-max="30" data-step="1">
   <meta name="x-icue-property" content="refreshMinutes" data-label="tr('Refresh Interval')" data-type="slider" data-default="5" data-min="1" data-max="30" data-step="1" data-unit-label="'min'">
 
@@ -36,7 +35,7 @@
 
   <script id="x-icue-groups" type="application/json">
   [
-    { "title": "tr('ClickUp Tasks')", "properties": ["apiToken", "listId", "widgetTitle", "dueFilter", "priorityFilter", "statusFilter", "maxItems", "refreshMinutes"] },
+    { "title": "tr('ClickUp Tasks')", "properties": ["apiToken", "listId", "widgetTitle", "dueFilter", "priorityFilter", "statusDefault", "maxItems", "refreshMinutes"] },
     { "title": "tr('Widget Personalization')", "properties": ["textColor", "accentColor", "backgroundColor", "backgroundMedia", "glassBlur", "transparency"] }
   ]
   </script>
@@ -206,7 +205,14 @@
       root.style.setProperty('--bg-color', (typeof bgc === 'string' && bgc) ? bgc : '#15161c');
       root.style.setProperty('--bg-blur', clampRange(getIcueProperty('glassBlur'), 0, 30, 0) + 'px');
 
+      // Media is comparatively expensive — only (re)load it when it actually changes,
+      // so applyStyles() is cheap and safe to call on every refresh tick (no flicker).
       const bgMedia = getIcueProperty('backgroundMedia');
+      const mediaKey = bgMedia ? JSON.stringify({
+        p: bgMedia.pathToAsset, s: bgMedia.scale, x: bgMedia.positionX, y: bgMedia.positionY, a: bgMedia.angle
+      }) : '';
+      if (mediaKey === lastAppliedMedia) return;
+      lastAppliedMedia = mediaKey;
       if (!bgMedia) { mediaBackgroundComponent.clear(); return; }
       mediaBackgroundComponent.loadMedia({
         path: bgMedia.pathToAsset,
@@ -218,6 +224,7 @@
         angle: typeof bgMedia === 'object' ? bgMedia.angle : undefined
       });
     }
+    let lastAppliedMedia;   // guards media reloads in applyStyles()
 
     let detailOpen = false;
 
@@ -245,43 +252,39 @@
     const STATUS_TYPE_RANK = { open: 0, custom: 1, done: 2, closed: 3 };
 
     // Live selection sets. null = not yet seeded from settings.
-    let filterStatus = null;     // Set of selected status names
-    let filterPriority = null;   // Set of selected priority keys
-    let statusPreset = 'all';    // pending status preset to resolve against loaded statuses
+    let filterStatus = null;        // Set of selected status names
+    let filterPriority = null;      // Set of selected priority keys
+    let statusDefaultNames = [];    // default status name(s) from settings, resolved against real data
     let filterBarOpen = false;
     // The status set is resolved lazily once we know which statuses exist in the data.
     let statusNeedsResolve = true;
 
     function prioKey(t) { return t.prio || 'none'; }
+    function normStatus(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
-    // Seed selections from the iCUE settings dropdowns (defaults / on settings change).
+    // Seed selections from the iCUE settings (defaults / on settings change).
     function seedFiltersFromSettings() {
       const pf = (getIcueProperty('priorityFilter') || 'all').toString();
       let allowed;
       if (pf === 'urgent') allowed = ['urgent'];
       else if (pf === 'high') allowed = ['urgent', 'high'];
       else if (pf === 'normal') allowed = ['urgent', 'high', 'normal'];
-      else allowed = PRIO_ORDER.slice();   // 'all'
+      else allowed = PRIO_ORDER.slice();   // 'all' → every priority chip selected
       filterPriority = new Set(allowed);
 
-      statusPreset = (getIcueProperty('statusFilter') || 'all').toString();
+      // "Default Status" setting: comma-separated status name(s); blank = all selected.
+      const sd = (getIcueProperty('statusDefault') || '').toString();
+      statusDefaultNames = sd.split(',').map(s => s.trim()).filter(Boolean);
       filterStatus = null;            // resolved against the real statuses at render time
       statusNeedsResolve = true;
     }
 
-    // Build the selected-status set from a preset, given the statuses present in the data.
+    // Build the selected-status set from the default-status setting, given the
+    // statuses present in the data. Blank or no match → select all (show everything).
     function resolveStatusSelection(present) {
-      const sel = new Set();
-      present.forEach(s => {
-        const type = s.type || '';
-        let keep;
-        if (statusPreset === 'open') keep = type === 'open';
-        else if (statusPreset === 'active') keep = type === 'custom';
-        else if (statusPreset === 'notdone') keep = (type === 'open' || type === 'custom');
-        else keep = true;             // 'all'
-        if (keep) sel.add(s.name);
-      });
-      // A preset that matches nothing (e.g. odd status types) falls back to showing all.
+      if (!statusDefaultNames.length) return new Set(present.map(s => s.name));
+      const want = new Set(statusDefaultNames.map(normStatus));
+      const sel = new Set(present.filter(s => want.has(normStatus(s.name))).map(s => s.name));
       return sel.size ? sel : new Set(present.map(s => s.name));
     }
 
@@ -318,8 +321,9 @@
       if (listStatusCache.has(listId)) return listStatusCache.get(listId);
       const token = getIcueProperty('apiToken');
       const data = await cuFetch(token, '/list/' + encodeURIComponent(listId));
-      const statuses = (data.statuses || []).map(s => ({
-        status: s.status, color: s.color || '#888888', type: s.type
+      const statuses = (data.statuses || []).map((s, i) => ({
+        status: s.status, color: s.color || '#888888', type: s.type,
+        orderindex: (s.orderindex !== undefined && s.orderindex !== null) ? Number(s.orderindex) : i
       }));
       listStatusCache.set(listId, statuses);
       return statuses;
@@ -354,6 +358,8 @@
           tasks = data.tasks || [];
           const id = await resolveIdentity(token).catch(() => null);
           if (id) cachedIdentity = id;
+          // Cache the list's status order so chips follow the list's configured order.
+          await getListStatuses(listIdSetting).catch(() => {});
         } else {
           const id = await resolveIdentity(token);
           const data = await cuFetch(token, '/team/' + id.teamId +
@@ -425,7 +431,19 @@
           statusMap.set(t.status, { name: t.status, color: t.statusColor, type: t.statusType });
         }
       });
+      // Order chips by the configured list's status order when available;
+      // otherwise fall back to status-type rank then name.
+      const listIdSetting = (getIcueProperty('listId') || '').toString().trim();
+      const orderMap = (listIdSetting && listStatusCache.has(listIdSetting))
+        ? new Map(listStatusCache.get(listIdSetting).map(s => [s.status, s.orderindex]))
+        : null;
       const presentStatuses = Array.from(statusMap.values()).sort((a, b) => {
+        if (orderMap) {
+          const oa = orderMap.has(a.name) ? orderMap.get(a.name) : 999;
+          const ob = orderMap.has(b.name) ? orderMap.get(b.name) : 999;
+          if (oa !== ob) return oa - ob;
+          return a.name.localeCompare(b.name);
+        }
         const ra = STATUS_TYPE_RANK[a.type] !== undefined ? STATUS_TYPE_RANK[a.type] : 9;
         const rb = STATUS_TYPE_RANK[b.type] !== undefined ? STATUS_TYPE_RANK[b.type] : 9;
         return ra !== rb ? ra - rb : a.name.localeCompare(b.name);
@@ -796,13 +814,15 @@
     });
 
     /* ---------- Lifecycle ---------- */
+    function refreshTick() { applyStyles(); loadTasks(); }   // re-read theme each tick (cheap; media guarded)
+
     function scheduleRefresh() {
       if (refreshTimer) clearInterval(refreshTimer);
       const mins = clampRange(getIcueProperty('refreshMinutes'), 1, 30, 5);
-      refreshTimer = setInterval(loadTasks, mins * 60000);
+      refreshTimer = setInterval(refreshTick, mins * 60000);
     }
 
-    function onUpdateRequested() { loadTasks(); }
+    function onUpdateRequested() { applyStyles(); loadTasks(); }
 
     function onIcueDataUpdated() {
       applyStyles();
