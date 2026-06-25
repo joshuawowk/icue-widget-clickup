@@ -19,6 +19,10 @@
   <meta name="x-icue-property" content="widgetTitle" data-label="tr('Title')" data-type="textfield" data-default="'My Tasks'">
   <meta name="x-icue-property" content="dueFilter" data-label="tr('Show')" data-type="combobox" data-default="'all'"
         data-values="[{'key':'all','value':tr('All open tasks')},{'key':'today','value':tr('Due today + overdue')},{'key':'week','value':tr('Due this week')}]">
+  <meta name="x-icue-property" content="priorityFilter" data-label="tr('Priority (default)')" data-type="combobox" data-default="'all'"
+        data-values="[{'key':'all','value':tr('All priorities')},{'key':'urgent','value':tr('Urgent only')},{'key':'high','value':tr('High & up')},{'key':'normal','value':tr('Normal & up')}]">
+  <meta name="x-icue-property" content="statusFilter" data-label="tr('Status (default)')" data-type="combobox" data-default="'all'"
+        data-values="[{'key':'all','value':tr('All statuses')},{'key':'open','value':tr('Not started')},{'key':'active','value':tr('In progress')},{'key':'notdone','value':tr('Not done')}]">
   <meta name="x-icue-property" content="maxItems" data-label="tr('Max Tasks')" data-type="slider" data-default="12" data-min="3" data-max="30" data-step="1">
   <meta name="x-icue-property" content="refreshMinutes" data-label="tr('Refresh Interval')" data-type="slider" data-default="5" data-min="1" data-max="30" data-step="1" data-unit-label="'min'">
 
@@ -32,7 +36,7 @@
 
   <script id="x-icue-groups" type="application/json">
   [
-    { "title": "tr('ClickUp Tasks')", "properties": ["apiToken", "listId", "widgetTitle", "dueFilter", "maxItems", "refreshMinutes"] },
+    { "title": "tr('ClickUp Tasks')", "properties": ["apiToken", "listId", "widgetTitle", "dueFilter", "priorityFilter", "statusFilter", "maxItems", "refreshMinutes"] },
     { "title": "tr('Widget Personalization')", "properties": ["textColor", "accentColor", "backgroundColor", "backgroundMedia", "glassBlur", "transparency"] }
   ]
   </script>
@@ -71,11 +75,12 @@
       </div>
 
       <div class="content" style="display:none;">
-        <header class="topbar">
+        <header class="topbar" id="topbar" role="button" tabindex="0" title="Filter tasks">
           <div class="topbar-left">
             <div class="title-row">
               <span class="widget-title">My Tasks</span>
               <svg class="chevron" viewBox="0 0 24 24"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+              <span class="filter-dot" id="filterDot" style="display:none;"></span>
             </div>
             <div class="subtitle">ClickUp</div>
           </div>
@@ -84,6 +89,16 @@
             <div class="task-count-label">open</div>
           </div>
         </header>
+        <div class="filter-bar" id="filterBar" style="display:none;">
+          <div class="filter-group">
+            <span class="filter-label">Status</span>
+            <div class="filter-chips" id="statusChips"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Priority</span>
+            <div class="filter-chips" id="priorityChips"></div>
+          </div>
+        </div>
         <div class="task-list" id="taskList"></div>
         <div class="overflow-hint" id="overflowHint" style="display:none;"></div>
       </div>
@@ -222,6 +237,54 @@
     let fetchInFlight = false;
     const listStatusCache = new Map();   // listId -> [{status, color, type}]
 
+    /* ---------- Filters (status + priority) ---------- */
+    // Fixed priority vocabulary (ClickUp set + a "none" bucket for unprioritized tasks)
+    const PRIO_ORDER = ['urgent', 'high', 'normal', 'low', 'none'];
+    const PRIO_LABEL = { urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low', none: 'None' };
+    const PRIO_COLOR = { urgent: '#f50000', high: '#ffcc00', normal: '#6fddff', low: '#b5bcc9', none: '#6b7280' };
+    const STATUS_TYPE_RANK = { open: 0, custom: 1, done: 2, closed: 3 };
+
+    // Live selection sets. null = not yet seeded from settings.
+    let filterStatus = null;     // Set of selected status names
+    let filterPriority = null;   // Set of selected priority keys
+    let statusPreset = 'all';    // pending status preset to resolve against loaded statuses
+    let filterBarOpen = false;
+    // The status set is resolved lazily once we know which statuses exist in the data.
+    let statusNeedsResolve = true;
+
+    function prioKey(t) { return t.prio || 'none'; }
+
+    // Seed selections from the iCUE settings dropdowns (defaults / on settings change).
+    function seedFiltersFromSettings() {
+      const pf = (getIcueProperty('priorityFilter') || 'all').toString();
+      let allowed;
+      if (pf === 'urgent') allowed = ['urgent'];
+      else if (pf === 'high') allowed = ['urgent', 'high'];
+      else if (pf === 'normal') allowed = ['urgent', 'high', 'normal'];
+      else allowed = PRIO_ORDER.slice();   // 'all'
+      filterPriority = new Set(allowed);
+
+      statusPreset = (getIcueProperty('statusFilter') || 'all').toString();
+      filterStatus = null;            // resolved against the real statuses at render time
+      statusNeedsResolve = true;
+    }
+
+    // Build the selected-status set from a preset, given the statuses present in the data.
+    function resolveStatusSelection(present) {
+      const sel = new Set();
+      present.forEach(s => {
+        const type = s.type || '';
+        let keep;
+        if (statusPreset === 'open') keep = type === 'open';
+        else if (statusPreset === 'active') keep = type === 'custom';
+        else if (statusPreset === 'notdone') keep = (type === 'open' || type === 'custom');
+        else keep = true;             // 'all'
+        if (keep) sel.add(s.name);
+      });
+      // A preset that matches nothing (e.g. odd status types) falls back to showing all.
+      return sel.size ? sel : new Set(present.map(s => s.name));
+    }
+
     function cuHeaders(token, json) {
       const h = { 'Authorization': token };
       if (json) h['Content-Type'] = 'application/json';
@@ -333,39 +396,107 @@
         prioRank: priorityRank(t),
         status: (t.status && t.status.status) || '',
         statusColor: (t.status && t.status.color) || '#888888',
+        statusType: (t.status && t.status.type) || '',
         tags: (t.tags || []).map(x => x.name)
       };
     }
 
+    let lastOffline = false;
+
+    function rerenderFromCache() {
+      renderTasks(lastGoodTasks || [], lastOffline);
+    }
+
     function renderTasks(tasks, offline) {
+      lastOffline = offline;
+      if (filterPriority === null) seedFiltersFromSettings();
+
       const filter = getIcueProperty('dueFilter') || 'all';
       const max = clampRange(getIcueProperty('maxItems'), 3, 30, 12);
 
       let shaped = tasks.map(shapeTask);
-
       if (filter === 'today') shaped = shaped.filter(t => t.due && t.due.sort <= 0);
       if (filter === 'week') shaped = shaped.filter(t => t.due && t.due.sort <= 7);
 
-      shaped.sort((a, b) => {
+      // Statuses + priorities actually present in the in-scope tasks (drives the chips).
+      const statusMap = new Map();   // name -> {name, color, type}
+      shaped.forEach(t => {
+        if (t.status && !statusMap.has(t.status)) {
+          statusMap.set(t.status, { name: t.status, color: t.statusColor, type: t.statusType });
+        }
+      });
+      const presentStatuses = Array.from(statusMap.values()).sort((a, b) => {
+        const ra = STATUS_TYPE_RANK[a.type] !== undefined ? STATUS_TYPE_RANK[a.type] : 9;
+        const rb = STATUS_TYPE_RANK[b.type] !== undefined ? STATUS_TYPE_RANK[b.type] : 9;
+        return ra !== rb ? ra - rb : a.name.localeCompare(b.name);
+      });
+      const presentStatusNames = new Set(presentStatuses.map(s => s.name));
+      const presentPrios = PRIO_ORDER.filter(k => shaped.some(t => prioKey(t) === k));
+      const presentPrioSet = new Set(presentPrios);
+
+      // Resolve the status selection from the settings preset once data is known.
+      if (statusNeedsResolve) {
+        filterStatus = resolveStatusSelection(presentStatuses);
+        statusNeedsResolve = false;
+      }
+
+      // A dimension only narrows results when a proper, non-empty subset is selected.
+      // (all-selected or none-selected both mean "show everything" for that dimension.)
+      const selStatus = new Set([...(filterStatus || [])].filter(n => presentStatusNames.has(n)));
+      const selPrio = new Set([...(filterPriority || [])].filter(k => presentPrioSet.has(k)));
+      const statusConstrained = selStatus.size > 0 && selStatus.size < presentStatusNames.size;
+      const prioConstrained = selPrio.size > 0 && selPrio.size < presentPrioSet.size;
+      const anyConstrained = statusConstrained || prioConstrained;
+
+      let filtered = shaped.filter(t => {
+        if (statusConstrained && !selStatus.has(t.status)) return false;
+        if (prioConstrained && !selPrio.has(prioKey(t))) return false;
+        return true;
+      });
+
+      filtered.sort((a, b) => {
         const as = a.due ? a.due.sort : 9999;
         const bs = b.due ? b.due.sort : 9999;
         if (as !== bs) return as - bs;
         return a.prioRank - b.prioRank;
       });
 
-      const total = shaped.length;
-      const visible = shaped.slice(0, max);
+      const scopedTotal = shaped.length;
+      const total = filtered.length;
+      const visible = filtered.slice(0, max);
 
       document.querySelector('.widget-title').textContent = getIcueProperty('widgetTitle') || 'My Tasks';
       document.querySelector('.subtitle').textContent =
-        (cachedIdentity ? cachedIdentity.teamName : 'ClickUp') + (offline ? ' • offline' : '');
+        (cachedIdentity ? cachedIdentity.teamName : 'ClickUp') +
+        (anyConstrained ? ' • filtered' : '') + (offline ? ' • offline' : '');
       document.querySelector('.task-count').textContent = total;
       document.querySelector('.task-count-label').textContent = total === 1 ? 'task' : 'tasks';
 
-      if (total === 0) { if (!detailOpen) showState('empty-state'); return; }
+      // Build the filter-bar chips + the topbar "filters active" indicator.
+      renderFilterChips(presentStatuses, presentPrios, selStatus, selPrio);
+      const dot = document.getElementById('filterDot');
+      const chev = document.querySelector('.chevron');
+      if (dot) dot.style.display = anyConstrained ? '' : 'none';
+      if (chev) chev.classList.toggle('active', anyConstrained);
+
+      // No tasks at all in scope → the friendly "all clear" panel.
+      if (scopedTotal === 0) { if (!detailOpen) showState('empty-state'); return; }
 
       const listEl = document.getElementById('taskList');
       listEl.innerHTML = '';
+
+      // Tasks exist but the active filters hide them all → keep the bar reachable.
+      if (total === 0) {
+        const note = document.createElement('div');
+        note.className = 'filter-empty';
+        note.textContent = 'No tasks match the current filters';
+        listEl.appendChild(note);
+        document.getElementById('overflowHint').style.display = 'none';
+        if (!filterBarOpen) setFilterBar(true);
+        if (!detailOpen) showState('content');
+        return;
+      }
+
       visible.forEach(t => {
         const row = document.createElement('div');
         row.className = 'task-row';
@@ -425,6 +556,78 @@
 
       if (!detailOpen) showState('content');
     }
+
+    /* ---------- Filter bar UI ---------- */
+    function makeChip(label, color, on, onToggle) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'filter-chip' + (on ? ' on' : '');
+      chip.style.setProperty('--chip-color', color);
+      const dot = document.createElement('span');
+      dot.className = 'chip-dot';
+      const txt = document.createElement('span');
+      txt.textContent = label;
+      chip.appendChild(dot);
+      chip.appendChild(txt);
+      chip.addEventListener('click', function (e) {
+        e.stopPropagation();
+        onToggle();
+      });
+      return chip;
+    }
+
+    function renderFilterChips(presentStatuses, presentPrios, selStatus, selPrio) {
+      const sWrap = document.getElementById('statusChips');
+      const pWrap = document.getElementById('priorityChips');
+      if (!sWrap || !pWrap) return;
+
+      // Each chip is an independent toggle; "on" simply mirrors its selection-set
+      // membership. (All-on and all-off both mean "show everything" — see renderTasks.)
+      sWrap.innerHTML = '';
+      presentStatuses.forEach(s => {
+        sWrap.appendChild(makeChip(s.name, s.color || '#888888', selStatus.has(s.name), function () {
+          toggleSelection(filterStatus, s.name);
+          rerenderFromCache();
+        }));
+      });
+      if (!presentStatuses.length) sWrap.innerHTML = '<span class="filter-none">No statuses</span>';
+
+      pWrap.innerHTML = '';
+      presentPrios.forEach(k => {
+        pWrap.appendChild(makeChip(PRIO_LABEL[k], PRIO_COLOR[k], selPrio.has(k), function () {
+          toggleSelection(filterPriority, k);
+          rerenderFromCache();
+        }));
+      });
+      if (!presentPrios.length) pWrap.innerHTML = '<span class="filter-none">No priorities</span>';
+    }
+
+    // Independent multi-select toggle. The filter only narrows results when a
+    // proper, non-empty subset of the present values is selected (see renderTasks);
+    // an empty selection or a full selection both mean "show everything".
+    function toggleSelection(set, value) {
+      if (!set) return;
+      if (set.has(value)) set.delete(value);
+      else set.add(value);
+    }
+
+    function setFilterBar(open) {
+      filterBarOpen = open;
+      const bar = document.getElementById('filterBar');
+      const chev = document.querySelector('.chevron');
+      if (bar) bar.style.display = open ? '' : 'none';
+      if (chev) chev.classList.toggle('open', open);
+    }
+    function toggleFilterBar() { setFilterBar(!filterBarOpen); }
+
+    (function wireTopbar() {
+      const tb = document.getElementById('topbar');
+      if (!tb) return;
+      tb.addEventListener('click', toggleFilterBar);
+      tb.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFilterBar(); }
+      });
+    })();
 
     /* ---------- Toast ---------- */
     let toastTimer = null;
@@ -604,6 +807,7 @@
     function onIcueDataUpdated() {
       applyStyles();
       scheduleRefresh();
+      seedFiltersFromSettings();   // settings changed → reset live filters to new defaults
       loadTasks();
     }
 

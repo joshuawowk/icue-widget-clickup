@@ -8,12 +8,17 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
 
 - **Direct ClickUp API connection** — no companion service needed; just your personal API token
 - **Interactive (touch)**:
+  - Tap the **header** → reveal the filter bar and toggle which **statuses** and **priorities** to show (multi-select chips)
   - Tap a task → details view with description, due date, priority, tags, and the list's status pills — tap a pill to change the task's status (PUT to ClickUp)
   - Tap a task's circle → quick-complete with a 3-second **Undo** toast before it commits
   - Task list scrolls by touch when it overflows
 - **My Tasks mode** (default): every open task assigned to you across the workspace, ordered by due date then priority
 - **List mode**: point it at a single ClickUp list via List ID
-- **Due filters**: all open tasks, due today + overdue, or due this week
+- **Filters**:
+  - **Due**: all open tasks, due today + overdue, or due this week
+  - **Priority**: in-widget multi-select chips (Urgent / High / Normal / Low / None), seeded by a **Priority (default)** setting (All / Urgent only / High & up / Normal & up)
+  - **Status**: in-widget multi-select chips built from your tasks' actual statuses, seeded by a **Status (default)** setting (All / Not started / In progress / Not done, by ClickUp status type)
+  - Chips are independent toggles — selecting none *or* all of a row means "show everything" for that row; an accent dot by the header shows when a filter is narrowing the list
 - **Due chips**: red *Overdue*, pink *Today*, amber *Tomorrow / this week*, muted dates beyond
 - **Priority stars**: filled accent star for `urgent` / `high` tasks
 - **Offline resilience**: keeps showing the last good data with an `offline` tag if the network drops
@@ -49,6 +54,8 @@ Copy this folder into your iCUE widgets directory and restart iCUE.
 | List ID | text | empty | Blank = all tasks assigned to you |
 | Title | text | `My Tasks` | Header label |
 | Show | dropdown | All open tasks | All / Due today + overdue / Due this week |
+| Priority (default) | dropdown | All priorities | Seeds the priority chips: All / Urgent only / High & up / Normal & up |
+| Status (default) | dropdown | All statuses | Seeds the status chips by type: All / Not started / In progress / Not done |
 | Max Tasks | slider | 12 | 3–30 |
 | Refresh Interval | slider | 5 min | 1–30 min |
 | Text / Accent / Background Color | color | white / `#9f8fff` / `#15161c` | |
@@ -59,7 +66,8 @@ Copy this folder into your iCUE widgets directory and restart iCUE.
 
 - **Loading** — spinner while fetching
 - **Setup** — no token configured; shows where to find one
-- **Empty** — "All clear" when no tasks match
+- **Empty** — "All clear" when there are no open tasks at all
+- **Filtered to zero** — when tasks exist but the active filters hide them all, the list shows an inline "No tasks match the current filters" note and the filter bar stays open so you can adjust
 - **Error** — invalid token or network failure (falls back to last good data when possible)
 
 ## Privacy
@@ -68,7 +76,7 @@ The widget talks **only** to `https://api.clickup.com` over HTTPS using your tok
 
 ## Roadmap
 
-- Tag/space filters
+- Tag / space filters (status + priority filters shipped in v1.2.0)
 - Create task from the widget
 
 ## License
