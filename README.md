@@ -10,6 +10,7 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
 - **Interactive (touch)**:
   - Tap the **header** → reveal the filter bar and toggle which **statuses** and **priorities** to show (multi-select chips)
   - Tap a task → details view with description, due date, priority, tags, and the list's status pills — tap a pill to change the task's status (PUT to ClickUp)
+  - Tap a task with **subtasks** → the details view lists them with an *X of Y done* progress count; completed subtasks are dimmed and struck through, and you can tap a subtask's circle to quick-complete it (same **Undo** toast)
   - Tap a task's circle → quick-complete with a 3-second **Undo** toast before it commits
   - Task list scrolls by touch when it overflows
 - **My Tasks mode** (default): every open task assigned to you across the workspace, ordered by due date then priority

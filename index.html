@@ -115,6 +115,12 @@
           <div class="detail-title" id="detailTitle"></div>
           <div class="detail-meta" id="detailMeta"></div>
           <div class="detail-desc" id="detailDesc"></div>
+
+          <div class="detail-subtasks" id="detailSubtasksSection" style="display:none;">
+            <div class="detail-section-label">Subtasks <span class="subtask-progress" id="subtaskProgress"></span></div>
+            <div class="subtask-list" id="detailSubtasks"></div>
+          </div>
+
           <div class="detail-section-label">Status</div>
           <div class="detail-statuses" id="detailStatuses">
             <div class="statuses-loading">Loading statuses…</div>
@@ -750,16 +756,21 @@
       });
 
       document.getElementById('detailDesc').textContent = '';
+      const subSection = document.getElementById('detailSubtasksSection');
+      if (subSection) subSection.style.display = 'none';
+      document.getElementById('detailSubtasks').innerHTML = '';
       const stWrap = document.getElementById('detailStatuses');
       stWrap.innerHTML = '<div class="statuses-loading">Loading statuses…</div>';
       showState('detail-view');
 
       const token = getIcueProperty('apiToken');
 
-      // Description (best-effort) + statuses in parallel
-      cuFetch(token, '/task/' + encodeURIComponent(task.id)).then(full => {
+      // Description + subtasks (best-effort) and statuses in parallel.
+      // include_subtasks=true returns a `subtasks` array (open + closed) on the parent.
+      cuFetch(token, '/task/' + encodeURIComponent(task.id) + '?include_subtasks=true').then(full => {
         const desc = (full.text_content || full.description || '').trim();
         document.getElementById('detailDesc').textContent = desc ? desc.slice(0, 600) : '';
+        renderSubtasks(full.subtasks || [], task);
       }).catch(() => {});
 
       try {
@@ -805,6 +816,134 @@
         });
         wrap.appendChild(btn);
       });
+    }
+
+    /* ---------- Subtasks (in detail view) ---------- */
+    function isDoneType(type) { return type === 'closed' || type === 'done'; }
+
+    function shapeSubtask(s, parent) {
+      return {
+        id: s.id,
+        name: s.name || '(untitled)',
+        listId: parent.listId,                          // subtasks return list:null → inherit parent's list
+        listName: parent.listName,
+        due: dueInfo(s.due_date),
+        dueMs: s.due_date ? Number(s.due_date) : null,
+        prio: s.priority && s.priority.priority,
+        prioColor: s.priority && s.priority.color,
+        status: (s.status && s.status.status) || '',
+        statusColor: (s.status && s.status.color) || '#888888',
+        statusType: (s.status && s.status.type) || '',
+        done: isDoneType(s.status && s.status.type)
+      };
+    }
+
+    function renderSubtasks(rawSubs, parent) {
+      const section = document.getElementById('detailSubtasksSection');
+      const listEl = document.getElementById('detailSubtasks');
+      const prog = document.getElementById('subtaskProgress');
+      if (!section || !listEl) return;
+      listEl.innerHTML = '';
+
+      const subs = (rawSubs || []).map(s => shapeSubtask(s, parent));
+      if (!subs.length) { section.style.display = 'none'; return; }
+
+      // Open subtasks first (by due date); completed ones sink to the bottom.
+      subs.sort((a, b) => {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        const as = a.due ? a.due.sort : 9999;
+        const bs = b.due ? b.due.sort : 9999;
+        return as - bs;
+      });
+
+      const doneCount = subs.filter(s => s.done).length;
+      if (prog) prog.textContent = doneCount + ' of ' + subs.length + ' done';
+
+      subs.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'subtask-row' + (s.done ? ' done' : '');
+        row.dataset.taskId = s.id;
+
+        const circle = document.createElement('span');
+        circle.className = 'check-circle' + (s.done ? ' checked' : '');
+        circle.style.setProperty('--st-color', s.statusColor);
+        circle.title = s.done ? 'Completed' : 'Mark complete';
+
+        const main = document.createElement('div');
+        main.className = 'subtask-main';
+        const name = document.createElement('div');
+        name.className = 'subtask-name';
+        name.textContent = s.name;
+        main.appendChild(name);
+
+        const meta = document.createElement('div');
+        meta.className = 'subtask-meta';
+        if (s.status) {
+          const st = document.createElement('span');
+          st.className = 'subtask-status';
+          st.style.setProperty('--st-color', s.statusColor);
+          st.textContent = s.status;
+          meta.appendChild(st);
+        }
+        if (s.due) {
+          const chip = document.createElement('span');
+          chip.className = 'due-chip due-' + s.due.cls;
+          chip.textContent = s.due.label;
+          meta.appendChild(chip);
+        }
+        if (meta.childNodes.length) main.appendChild(meta);
+
+        row.appendChild(circle);
+        row.appendChild(main);
+
+        // Open subtasks get a quick-complete circle (with undo), mirroring the main list.
+        if (!s.done) {
+          circle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            quickCompleteSubtask(s, row);
+          });
+        }
+        listEl.appendChild(row);
+      });
+
+      section.style.display = '';
+    }
+
+    function quickCompleteSubtask(sub, row) {
+      if (row.classList.contains('completing')) return;   // already pending
+      if (!sub.listId) { showToast('Cannot complete — list unknown', null, null, 3000); return; }
+      row.classList.add('completing');
+      let cancelled = false;
+
+      showToast('Completing "' + sub.name.slice(0, 36) + (sub.name.length > 36 ? '…' : '') + '"', 'Undo', function () {
+        cancelled = true;
+        row.classList.remove('completing');
+      }, 3000);
+
+      setTimeout(async function () {
+        if (cancelled) return;
+        try {
+          const statuses = await getListStatuses(sub.listId);
+          const closed = findClosedStatus(statuses);
+          if (!closed) throw new Error('No closed status on list');
+          await setTaskStatus(sub.id, closed.status);
+          row.classList.add('completed-gone');
+          // Re-pull the parent's subtasks so the progress count + ordering stay correct.
+          setTimeout(function () { if (detailTask) refreshDetailSubtasks(detailTask); }, 450);
+        } catch (e) {
+          console.error('Subtask complete failed:', e);
+          row.classList.remove('completing');
+          showToast('Could not complete subtask — try again', null, null, 4000);
+        }
+      }, 3000);
+    }
+
+    function refreshDetailSubtasks(parent) {
+      const token = getIcueProperty('apiToken');
+      if (!token) return;
+      cuFetch(token, '/task/' + encodeURIComponent(parent.id) + '?include_subtasks=true')
+        .then(full => renderSubtasks(full.subtasks || [], parent))
+        .catch(() => {});
     }
 
     document.getElementById('backBtn').addEventListener('click', function () {
