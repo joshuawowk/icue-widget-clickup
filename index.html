@@ -766,12 +766,11 @@
       const token = getIcueProperty('apiToken');
 
       // Description + subtasks (best-effort) and statuses in parallel.
-      // include_subtasks=true returns a `subtasks` array (open + closed) on the parent.
-      cuFetch(token, '/task/' + encodeURIComponent(task.id) + '?include_subtasks=true').then(full => {
-        const desc = (full.text_content || full.description || '').trim();
-        document.getElementById('detailDesc').textContent = desc ? desc.slice(0, 600) : '';
-        renderSubtasks(full.subtasks || [], task);
-      }).catch(() => {});
+      fetchDetail(token, task).then(d => {
+        if (detailTask !== task) return;   // user navigated away meanwhile
+        document.getElementById('detailDesc').textContent = d.desc ? d.desc.slice(0, 600) : '';
+        renderSubtasks(d.subs, task);
+      });
 
       try {
         const statuses = await getListStatuses(task.listId);
@@ -819,6 +818,34 @@
     }
 
     /* ---------- Subtasks (in detail view) ---------- */
+    // Primary source: GET /task/{id}?include_subtasks=true → `subtasks` on the parent.
+    // Some workspaces return no `subtasks` array from that endpoint, so fall back to
+    // the team-level `parent` filter, which is the documented way to list a task's
+    // subtasks (needs subtasks=true or subtask-type tasks are excluded from results).
+    async function fetchSubtasksViaParent(token, parent) {
+      const id = await resolveIdentity(token);
+      if (!id.teamId) return [];
+      const data = await cuFetch(token, '/team/' + id.teamId +
+        '/task?parent=' + encodeURIComponent(parent.id) + '&subtasks=true&include_closed=true');
+      return (data.tasks || []).filter(t => t.parent === parent.id);   // direct children only
+    }
+
+    async function fetchDetail(token, task) {
+      let desc = '', subs = [];
+      try {
+        const full = await cuFetch(token, '/task/' + encodeURIComponent(task.id) + '?include_subtasks=true');
+        desc = (full.text_content || full.description || '').trim();
+        subs = (full.subtasks || []).filter(s => !s.parent || s.parent === task.id);
+      } catch (e) {
+        console.error('Task detail fetch failed:', e);
+      }
+      if (!subs.length) {
+        try { subs = await fetchSubtasksViaParent(token, task); }
+        catch (e) { console.error('Subtask fallback fetch failed:', e); }
+      }
+      return { desc: desc, subs: subs };
+    }
+
     function isDoneType(type) { return type === 'closed' || type === 'done'; }
 
     function shapeSubtask(s, parent) {
@@ -941,9 +968,10 @@
     function refreshDetailSubtasks(parent) {
       const token = getIcueProperty('apiToken');
       if (!token) return;
-      cuFetch(token, '/task/' + encodeURIComponent(parent.id) + '?include_subtasks=true')
-        .then(full => renderSubtasks(full.subtasks || [], parent))
-        .catch(() => {});
+      fetchDetail(token, parent).then(d => {
+        if (detailTask !== parent) return;   // user navigated away meanwhile
+        renderSubtasks(d.subs, parent);
+      });
     }
 
     document.getElementById('backBtn').addEventListener('click', function () {
