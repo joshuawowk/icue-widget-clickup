@@ -89,7 +89,7 @@ private fun MainScreen() {
 
   Scaffold(
     topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
-    contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+    contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
   ) { padding ->
     Column(
       Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),

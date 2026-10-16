@@ -6,6 +6,7 @@ import net.jwowk.clickupwidget.data.model.PriorityDefault
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
+import java.text.Collator
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -60,6 +61,8 @@ object TaskLogic {
   private const val NO_DUE_SORT = 9999.0
   private val STATUS_TYPE_RANK = mapOf("open" to 0, "custom" to 1, "done" to 2, "closed" to 3)
   private val CLOSED_NAME = Regex("^(complete|done|closed)$", RegexOption.IGNORE_CASE)
+  /** Stand-in for JS `localeCompare`: case-insensitive at primary level, lowercase-first ties. */
+  private val NAME_ORDER: Comparator<String> = Collator.getInstance(Locale.ROOT).let { c -> Comparator { a, b -> c.compare(a, b) } }
 
   /** Lowercase alphanumerics only: "In-Progress" == "in progress" == "inprogress". */
   fun normStatus(s: String): String = s.lowercase(Locale.ROOT).filter { it in 'a'..'z' || it in '0'..'9' }
@@ -118,9 +121,9 @@ object TaskLogic {
   fun orderStatuses(present: List<TaskStatus>, listStatuses: List<TaskStatus>): List<TaskStatus> {
     if (listStatuses.isNotEmpty()) {
       val order = listStatuses.associate { it.name to it.orderIndex }
-      return present.sortedWith(compareBy<TaskStatus> { order[it.name] ?: 999 }.thenBy { it.name })
+      return present.sortedWith(compareBy<TaskStatus> { order[it.name] ?: 999 }.thenBy(NAME_ORDER) { it.name })
     }
-    return present.sortedWith(compareBy<TaskStatus> { STATUS_TYPE_RANK[it.type] ?: 9 }.thenBy { it.name })
+    return present.sortedWith(compareBy<TaskStatus> { STATUS_TYPE_RANK[it.type] ?: 9 }.thenBy(NAME_ORDER) { it.name })
   }
 
   /**

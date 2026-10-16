@@ -10,7 +10,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -284,10 +283,6 @@ class TaskLogicTest {
     assertEquals(listOf("A", "B"), TaskLogic.orderStatuses(listOf(st("B"), st("A")), list).map { it.name })
   }
 
-  @Ignore(
-    "DIVERGENCE: JS tie-break is a.name.localeCompare(b.name) (index.html:~448, 'alpha' < 'Beta'); " +
-      "Kotlin thenBy { name } (TaskLogic.kt orderStatuses) is ordinal ('Beta' < 'alpha')",
-  )
   @Test fun orderStatuses_nameTieBreakIsLocaleAware() {
     val present = listOf(st("Beta", "custom"), st("alpha", "custom"))
     assertEquals(listOf("alpha", "Beta"), TaskLogic.orderStatuses(present, emptyList()).map { it.name })

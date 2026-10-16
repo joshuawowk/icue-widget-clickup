@@ -1,6 +1,6 @@
 package net.jwowk.clickupwidget.ui.config
 
-import android.widget.FrameLayout
+import android.appwidget.AppWidgetHostView
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -53,7 +53,7 @@ private const val RENDER_DEBOUNCE_MS = 150L
 
 /**
  * Live preview of the real widget UI for the unsaved [config], with a size switch. Re-renders ~150 ms
- * after the last change by applying `RemoteViews` into a plain FrameLayout.
+ * after the last change by applying `RemoteViews` into an AppWidgetHostView.
  */
 @Composable
 fun WidgetPreviewPane(
@@ -76,7 +76,9 @@ fun WidgetPreviewPane(
 @Composable
 private fun PreviewFrame(config: WidgetConfig, workspaceName: String, size: DpSize) {
   val context = LocalContext.current
-  var frame by remember { mutableStateOf<FrameLayout?>(null) }
+  // An AppWidgetHostView parent, not a plain FrameLayout: the platform only binds list adapters
+  // (setRemoteAdapter) when the RemoteViews' root parent is an AppWidgetHostView.
+  var frame by remember { mutableStateOf<AppWidgetHostView?>(null) }
   var failed by remember { mutableStateOf(false) }
 
   LaunchedEffect(frame, config, workspaceName, size) {
@@ -113,7 +115,7 @@ private fun PreviewFrame(config: WidgetConfig, workspaceName: String, size: DpSi
     contentAlignment = Alignment.Center,
   ) {
     AndroidView(
-      factory = { FrameLayout(it).also { view -> frame = view } },
+      factory = { AppWidgetHostView(it).also { view -> frame = view } },
       modifier = Modifier.size(size.width, size.height),
     )
     if (failed) {
