@@ -577,22 +577,24 @@ private fun TaskRowView(
   }
 }
 
-/** Meta line 2: up to [WidgetMath.MAX_TAG_CHIPS] tinted tag chips that fit, then "+N" for the rest. */
+/** Meta line 2: up to [WidgetMath.MAX_TAG_CHIPS] tag chips (solid tag color) that fit, then "+N" for the rest. */
 @Composable
 private fun TagLine(task: TaskItem, colors: WidgetColors, dims: Dims) {
   val labels = task.tags.map { WidgetMath.tagLabel(it) }
   val shown = WidgetMath.fitTagChips(labels, dims.chip, dims.textWidth)
   Row(modifier = GlanceModifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
     for (i in 0 until shown) {
-      // Fill is the tag's own color at low alpha so the theme's text color stays legible in light and dark.
-      val fill = Palettes.withAlpha(TaskLogic.parseColor(task.tagColors[task.tags[i]]), 0.30f)
+      // Solid tag color (as ClickUp shows tags) with black/white text by luminance: a translucent tint
+      // renders washed-out in RemoteViews, leaving light text on a pale chip.
+      val fill = TaskLogic.parseColor(task.tagColors[task.tags[i]], fallback = 0xFF6B7280)
+      val ink = ColorProvider(Color(if (Palettes.isDark(fill)) 0xFFFFFFFF else 0xFF111111))
       Box(modifier = GlanceModifier.padding(end = 4.dp)) {
         Box(
           modifier = GlanceModifier
             .background(ImageProvider(R.drawable.widget_pill), colorFilter = ColorFilter.tint(ColorProvider(Color(fill))))
             .padding(horizontal = 6.dp, vertical = 1.dp),
         ) {
-          Text(labels[i], style = style(colors.text, dims.chip), maxLines = 1)
+          Text(labels[i], style = style(ink, dims.chip, bold = true), maxLines = 1)
         }
       }
     }
