@@ -126,7 +126,7 @@ private fun customField(
       val opts = options(config)
       val ids = (value as? JsonArray)?.mapNotNull { it.asString() }.orEmpty()
       plain(ids.mapNotNull { id ->
-        opts.firstOrNull { it.str("id") == id }?.let { o -> o.str("label") ?: o.str("name") }?.takeIf { it.isNotBlank() }
+        opts.firstOrNull { it.str("id") == id }?.let { o -> o.str("label")?.takeIf { it.isNotBlank() } ?: o.str("name") }?.takeIf { it.isNotBlank() }
       }.joinToString(", "))
     }
     "date" -> value.asLong()?.takeIf { it > 0 }?.let { formatFieldDate(it, locale, zone) to null }
@@ -143,7 +143,7 @@ private fun customField(
     "automatic_progress", "manual_progress" -> {
       val o = value.asObject()
       val pct = (o?.get("percent_complete") ?: o?.get("percent_completed")).asString()?.toDoubleOrNull()
-      pct?.takeIf { it > 0 }?.let { "${Math.round(it)}%" to null }
+      pct?.takeIf { it.isFinite() }?.let { Math.round(it) }?.takeIf { it > 0 }?.let { "$it%" to null }
     }
     "location" -> plain(value.asObject()?.str("formatted_address")?.trim())
     "formula" -> plain(numberText(value))

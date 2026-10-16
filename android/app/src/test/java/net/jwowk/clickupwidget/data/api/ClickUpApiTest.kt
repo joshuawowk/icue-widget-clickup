@@ -476,6 +476,19 @@ class ClickUpApiTest {
   }
 
   @Test
+  fun createTask_zeroUserIdOmitsAssigneesAndIsNotCached() = runTest {
+    route("GET /user", """{"user":{"username":"josh"}}""")
+    route("POST /list/77/task", """{"id":"new3","name":"X"}""")
+    val api = api()
+    api.createTask(NewTask(listId = "77", name = "X", assignToMe = true))
+    api.createTask(NewTask(listId = "77", name = "X", assignToMe = true))
+    val posts = requests("/list/77/task")
+    assertEquals(2, posts.size)
+    posts.forEach { assertEquals("""{"name":"X"}""", it.body.readUtf8()) }
+    assertEquals(2, requests("/user").size)
+  }
+
+  @Test
   fun createTask_blankNameFailsBeforeAnyRequest() = runTest {
     try {
       api().createTask(NewTask(listId = "77", name = "   "))

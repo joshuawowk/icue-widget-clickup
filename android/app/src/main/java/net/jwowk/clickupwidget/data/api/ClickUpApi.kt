@@ -252,7 +252,7 @@ class ClickUpApi(
     val name = task.name.trim()
     require(name.isNotEmpty()) { "Task name must not be blank" }
     val token = checkToken()
-    val me = if (task.assignToMe) identity().userId else null
+    val me = if (task.assignToMe) identity().userId.takeIf { it > 0 } else null
     val body = buildJsonObject {
       put("name", name)
       if (task.description.isNotBlank()) put("description", task.description)
@@ -298,7 +298,7 @@ class ClickUpApi(
     identity?.let { return it }
     val loaded = loadIdentity(token)
     // Keep it only if the stored token did not change while loading.
-    if (token == cachedFor) identity = loaded
+    if (token == cachedFor && loaded.userId > 0) identity = loaded
     return loaded
   }
 
