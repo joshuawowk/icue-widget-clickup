@@ -12,7 +12,6 @@ import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.data.model.Workspace
 import okhttp3.OkHttpClient
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Live ClickUp v2 API implementation: a thin shell over [ClickUpApi] (OkHttp + kotlinx.serialization). */
@@ -22,6 +21,8 @@ class ClickUpTaskRepository(context: Context, private val tokenStore: TokenStore
     .connectTimeout(TIMEOUT_S, TimeUnit.SECONDS)
     .readTimeout(TIMEOUT_S, TimeUnit.SECONDS)
     .writeTimeout(TIMEOUT_S, TimeUnit.SECONDS)
+    // Caps the whole call incl. reading the body, which coroutine cancellation can't interrupt.
+    .callTimeout(CALL_TIMEOUT_S, TimeUnit.SECONDS)
     .build()
 
   private val lock = Any()
@@ -48,9 +49,9 @@ class ClickUpTaskRepository(context: Context, private val tokenStore: TokenStore
   private companion object {
     const val DEFAULT_BASE_URL = "https://api.clickup.com/api/v2"
     const val TIMEOUT_S = 15L
+    const val CALL_TIMEOUT_S = 30L
   }
 
   /** Stored token; a transient Keystore failure surfaces as an IOException (offline), not as NoTokenException (setup). */
-  private fun currentToken(): String? =
-    tokenStore.token() ?: if (tokenStore.temporarilyUnavailable) throw IOException("Token temporarily unavailable") else null
+  private fun currentToken(): String? = tokenStore.tokenOrThrow()
 }

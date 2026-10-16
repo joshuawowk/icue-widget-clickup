@@ -67,8 +67,8 @@ class ConfigActivity : ComponentActivity() {
     lifecycleScope.launch {
       try {
         // Not cancellable: a half-finished save could leave a renamed image without a saved config.
-        withContext(NonCancellable) {
-          val config = vm.commit() ?: return@withContext
+        val saved = withContext(NonCancellable) {
+          val config = vm.commit() ?: return@withContext false
           Graph.configStore.saveWidgetConfig(appWidgetId, config)
           // Set before the (slower) widget refresh so the launcher keeps the widget even if we are cut short.
           setResult(RESULT_OK, resultIntent())
@@ -78,8 +78,10 @@ class ConfigActivity : ComponentActivity() {
             WidgetUpdater.refreshNow(this@ConfigActivity, appWidgetId)
             WidgetUpdater.schedulePeriodic(this@ConfigActivity)
           }.onFailure { Log.w(TAG, "Widget update after save failed", it) }
+          true
         }
-        finish()
+        // Validation failed (e.g. no list picked): stay so the user can fix it.
+        if (saved) finish()
       } finally {
         saving = false
       }

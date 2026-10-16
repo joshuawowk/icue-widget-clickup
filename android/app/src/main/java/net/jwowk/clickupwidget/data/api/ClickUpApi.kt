@@ -91,8 +91,26 @@ class ClickUpApi(
     }
   }
 
-  /** Open tasks per [config] (list mode or My Tasks mode); unfiltered and unsorted. */
-  suspend fun fetchTasks(config: WidgetConfig): TaskFetch {
+  /**
+   * Open tasks per [config] (list mode or My Tasks mode); unfiltered and unsorted. ClickUp also answers 401
+   * ("Team not authorized") for a list/workspace the token can't see, so a 401 here is re-checked against
+   * /user: still 401 → bad token; otherwise → [ClickUpApiException] 403 (no access to that list/workspace).
+   */
+  suspend fun fetchTasks(config: WidgetConfig): TaskFetch = try {
+    fetchTasksUnchecked(config)
+  } catch (e: ClickUpApiException) {
+    if (e.code != 401) throw e
+    val token = checkToken()
+    val tokenStillValid = try {
+      getJson(path("user"), token)
+      true
+    } catch (check: ClickUpApiException) {
+      if (check.code == 401) false else throw e
+    }
+    if (tokenStillValid) throw ClickUpApiException(403, "No access to this list or workspace") else throw e
+  }
+
+  private suspend fun fetchTasksUnchecked(config: WidgetConfig): TaskFetch {
     if (config.isListMode) {
       val tasks = getJson(path("list", config.listId, "task") {
         addQueryParameter("include_closed", "false")
@@ -272,12 +290,14 @@ class ClickUpApi(
         override fun onResponse(call: Call, response: Response) = cont.resume(response) { _, r, _ -> r.close() }
       })
     }
-    return withContext(Dispatchers.IO) {
-      response.use {
-        if (it.code == 401) throw ClickUpApiException(401, "Invalid API token")
-        if (!it.isSuccessful) throw ClickUpApiException(it.code)
-        parse(it.body?.string().orEmpty())
+    try {
+      return withContext(Dispatchers.IO) {
+        if (response.code == 401) throw ClickUpApiException(401, "Invalid API token")
+        if (!response.isSuccessful) throw ClickUpApiException(response.code)
+        parse(response.body?.string().orEmpty())
       }
+    } finally {
+      response.close()
     }
   }
 

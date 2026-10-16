@@ -307,4 +307,27 @@ class ClickUpApiTest {
     }
     assertTrue(requests("/task/t1").isEmpty())
   }
+
+  @Test
+  fun listMode401_withValidToken_isNoAccess403() = runTest {
+    route("GET /list/77/task", """{"err":"Team not authorized","ECODE":"OAUTH_027"}""", code = 401)
+    try {
+      api().fetchTasks(WidgetConfig(listId = "77"))
+      fail("expected ClickUpApiException")
+    } catch (e: ClickUpApiException) {
+      assertEquals(403, e.code)
+    }
+  }
+
+  @Test
+  fun listMode401_withRejectedToken_staysInvalidToken401() = runTest {
+    route("GET /list/77/task", """{"err":"Token invalid","ECODE":"OAUTH_025"}""", code = 401)
+    route("GET /user", """{"err":"Token invalid","ECODE":"OAUTH_025"}""", code = 401)
+    try {
+      api().fetchTasks(WidgetConfig(listId = "77"))
+      fail("expected ClickUpApiException")
+    } catch (e: ClickUpApiException) {
+      assertEquals(401, e.code)
+    }
+  }
 }

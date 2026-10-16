@@ -96,6 +96,7 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     }
     if (prev.loadState == LoadState.READY) return prev.copy(offline = true)
     val message = when {
+      e is ClickUpApiException && e.code == 403 -> ctx.getString(R.string.w_err_access)
       e is ClickUpApiException -> ctx.getString(R.string.w_err_http, e.code)
       e is IOException -> ctx.getString(R.string.w_err_network)
       else -> e.message ?: e.javaClass.simpleName

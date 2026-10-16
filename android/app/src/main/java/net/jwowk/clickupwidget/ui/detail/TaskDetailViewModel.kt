@@ -23,6 +23,7 @@ import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.widget.WidgetUpdater
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A snackbar request. [undoId] non-null means it carries an Undo action for that pending completion.
@@ -34,6 +35,8 @@ internal data class SnackMessage(
   val text: String,
   val undoId: String? = null,
   val deadlineMs: Long = 0,
+  /** How long it shows; a queued message gets a fresh [deadlineMs] when it is promoted. */
+  val durationMs: Long = 0,
 )
 
 /** Process-lifetime scope for requests that must finish (and refresh the widget) after the sheet is gone. */
@@ -83,7 +86,10 @@ internal data class DetailUiState(
     if (snack?.undoId != null && msg.undoId == null) copy(snackQueue = snackQueue + msg) else copy(snack = msg)
 
   /** Drop the current snackbar and promote the next queued one. */
-  fun nextSnack(): DetailUiState = copy(snack = snackQueue.firstOrNull(), snackQueue = snackQueue.drop(1))
+  fun nextSnack(): DetailUiState = copy(
+    snack = snackQueue.firstOrNull()?.let { it.copy(deadlineMs = SystemClock.elapsedRealtime() + it.durationMs) },
+    snackQueue = snackQueue.drop(1),
+  )
 
   /** Drop the undo snackbar for [id] (its op left the pending set). */
   fun clearUndoSnack(id: String): DetailUiState = if (snack?.undoId == id) nextSnack() else this
@@ -99,8 +105,8 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
   private val _state = MutableStateFlow<DetailUiState?>(null)
   val state: StateFlow<DetailUiState?> = _state.asStateFlow()
 
-  private var session = 0
-  private var snackKey = 0L
+  @Volatile private var session = 0
+  private val snackKey = AtomicLong()
   private var loadJob: Job? = null
   private var statusJob: Job? = null
   private val ops = HashMap<String, PendingOp>()
@@ -275,7 +281,13 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
 
   /** A subtask request finished: refresh now if nobody is left to flush on close, else defer to the flush. */
   private fun refreshAfterRequest(s: Int, appWidgetId: Int) {
-    if (cleared || s != session) refreshWidget(appWidgetId) else dirty = true
+    if (cleared || s != session) {
+      refreshWidget(appWidgetId)
+    } else {
+      dirty = true
+      // onCleared may have flushed between the check and the write: don't strand the refresh.
+      if (cleared) refreshWidget(appWidgetId)
+    }
   }
 
   fun snackConsumed(key: Long) {
@@ -283,7 +295,7 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   private fun snack(s: Int, text: String, undoId: String? = null, durationMs: Long = 4000) {
-    val msg = SnackMessage(++snackKey, text, undoId, SystemClock.elapsedRealtime() + durationMs)
+    val msg = SnackMessage(snackKey.incrementAndGet(), text, undoId, SystemClock.elapsedRealtime() + durationMs, durationMs)
     update(s) { it.withSnack(msg) }
   }
 

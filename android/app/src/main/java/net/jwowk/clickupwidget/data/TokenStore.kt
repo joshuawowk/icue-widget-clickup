@@ -5,8 +5,8 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import java.io.IOException
 import java.security.KeyStore
-import java.security.UnrecoverableKeyException
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -44,6 +44,11 @@ class TokenStore(context: Context) {
    * call retries). Callers should treat this like a network error, not as "signed out".
    */
   val temporarilyUnavailable: Boolean get() = synchronized(lock) { !cacheLoaded && transientFailure }
+
+  /** [token] and [temporarilyUnavailable] read atomically: the token, null if none, or IOException if transient. */
+  fun tokenOrThrow(): String? = synchronized(lock) {
+    token() ?: if (transientFailure && !cacheLoaded) throw IOException("Token temporarily unavailable") else null
+  }
 
   fun save(token: String): Unit = synchronized(lock) {
     val blob = try {
@@ -88,7 +93,9 @@ class TokenStore(context: Context) {
   }
 
   private fun isUnusable(e: Exception): Boolean =
-    e is AEADBadTagException || e is IllegalArgumentException || e is UnrecoverableKeyException ||
+    // Not UnrecoverableKeyException: Keystore2 wraps transient daemon errors in it. A key that is really
+    // gone/broken still recovers: hasToken() is false, and save() replaces the key on re-entry.
+    e is AEADBadTagException || e is IllegalArgumentException ||
       e is KeyPermanentlyInvalidatedException || e is MissingKeyException
 
   private fun encrypt(plain: String): String {

@@ -26,6 +26,7 @@
     <string name="w_already_completing">Already completing</string>
     <string name="w_list_unknown">Cannot complete — list unknown</string>
     <string name="w_err_token">Invalid API token — check settings</string>
+    <string name="w_err_access">No access to this list — check widget settings</string>
     <string name="w_err_network">Network error — retrying on next refresh</string>
     <string name="w_err_http">ClickUp error (HTTP %1$d)</string>
     <string name="w_cd_complete">Complete task</string>
