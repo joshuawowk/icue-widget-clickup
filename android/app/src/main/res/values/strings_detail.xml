@@ -5,6 +5,14 @@
     <string name="detail_load_failed">Couldn\'t load details</string>
     <string name="detail_show_more">Show more</string>
     <string name="detail_show_less">Show less</string>
+    <string name="detail_description">Description</string>
+    <string name="detail_no_description">No description</string>
+    <string name="detail_fields">Fields</string>
+    <string name="detail_tags">Tags</string>
+    <string name="detail_priority_heading">Priority</string>
+    <string name="detail_priority_changed">Priority → %1$s</string>
+    <string name="detail_priority_cleared">Priority cleared</string>
+    <string name="detail_priority_failed">Could not change priority — try again</string>
     <string name="detail_subtasks">Subtasks</string>
     <string name="detail_subtasks_progress">%1$d of %2$d done</string>
     <string name="detail_subtask_undo_cd">Undo completing \"%1$s\"</string>

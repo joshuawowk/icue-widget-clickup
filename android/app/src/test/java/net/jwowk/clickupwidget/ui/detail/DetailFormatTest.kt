@@ -2,9 +2,11 @@ package net.jwowk.clickupwidget.ui.detail
 
 import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -94,5 +96,49 @@ class DetailFormatTest {
     assertEquals(0xFF00FF00, DetailFormat.priorityColor(custom))
     val none = TaskItem(id = "1", name = "n", priority = Priority.HIGH)
     assertEquals(Priority.HIGH.chipColor, DetailFormat.priorityColor(none))
+  }
+
+  @Test fun fieldsSectionHiddenWhenEmptyOrBlank() {
+    assertFalse(DetailFormat.showFields(emptyList()))
+    assertFalse(DetailFormat.showFields(listOf(TaskField("A", "  "))))
+    assertTrue(DetailFormat.showFields(listOf(TaskField("A", "x"))))
+  }
+
+  @Test fun tagsSectionAndColors() {
+    val t = TaskItem(id = "1", name = "n", tags = listOf("meeting", "plain", "bad"), tagColors = mapOf("meeting" to "#0f5096", "bad" to "zz"))
+    assertTrue(DetailFormat.showTags(t))
+    assertFalse(DetailFormat.showTags(t.copy(tags = emptyList())))
+    assertEquals(0xFF0F5096, DetailFormat.tagColor(t, "meeting"))
+    assertNull(DetailFormat.tagColor(t, "plain"))
+    assertNull(DetailFormat.tagColor(t, "bad"))
+  }
+
+  @Test fun priorityChoicesInOrder() {
+    assertEquals(
+      listOf(Priority.URGENT, Priority.HIGH, Priority.NORMAL, Priority.LOW, Priority.NONE),
+      DetailFormat.priorityChoices,
+    )
+    assertTrue(DetailFormat.isCurrentPriority(Priority.LOW, Priority.LOW))
+    assertFalse(DetailFormat.isCurrentPriority(Priority.LOW, Priority.NONE))
+  }
+
+  @Test fun mergeFreshTaskKeepsLocalState() {
+    val cur = TaskItem(
+      id = "1", name = "n", listId = "L", listName = "List", url = "u",
+      priority = Priority.HIGH, status = "doing", statusType = "custom",
+    )
+    val fresh = TaskItem(id = "1", name = "n", priority = Priority.LOW, status = "todo", statusType = "open", tags = listOf("a"))
+    val plain = DetailFormat.mergeFreshTask(cur, fresh, keepPriority = false, keepStatus = false)
+    assertEquals("L", plain.listId)
+    assertEquals("List", plain.listName)
+    assertEquals("u", plain.url)
+    assertEquals(Priority.LOW, plain.priority)
+    assertEquals("todo", plain.status)
+    assertEquals(listOf("a"), plain.tags)
+    val kept = DetailFormat.mergeFreshTask(cur, fresh, keepPriority = true, keepStatus = true)
+    assertEquals(Priority.HIGH, kept.priority)
+    assertEquals("doing", kept.status)
+    assertEquals("custom", kept.statusType)
+    assertEquals(listOf("a"), kept.tags)
   }
 }

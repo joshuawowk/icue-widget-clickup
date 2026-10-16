@@ -70,6 +70,7 @@ import net.jwowk.clickupwidget.R
 import net.jwowk.clickupwidget.data.DueInfo
 import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.TaskStatus
 
@@ -81,6 +82,7 @@ internal fun TaskDetailScreen(
   state: DetailUiState,
   onDismiss: () -> Unit,
   onSetStatus: (TaskStatus) -> Unit,
+  onSetPriority: (Priority) -> Unit,
   onCompleteSubtask: (TaskItem) -> Unit,
   onCompleteTask: () -> Unit,
   onUndo: (String) -> Unit,
@@ -132,7 +134,7 @@ internal fun TaskDetailScreen(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
       ) {
-        SheetContent(state, onDismiss, onSetStatus, onCompleteSubtask, onCompleteTask, onUndo, onOpenInClickUp)
+        SheetContent(state, onDismiss, onSetStatus, onSetPriority, onCompleteSubtask, onCompleteTask, onUndo, onOpenInClickUp)
       }
     }
     SnackbarHost(
@@ -150,6 +152,7 @@ private fun SheetContent(
   state: DetailUiState,
   onDismiss: () -> Unit,
   onSetStatus: (TaskStatus) -> Unit,
+  onSetPriority: (Priority) -> Unit,
   onCompleteSubtask: (TaskItem) -> Unit,
   onCompleteTask: () -> Unit,
   onUndo: (String) -> Unit,
@@ -188,46 +191,21 @@ private fun SheetContent(
 
     MetaRow(state)
     Description(state)
+    if (DetailFormat.showFields(state.fields)) FieldsSection(state.fields, state.task.id)
+    if (DetailFormat.showTags(task)) TagsSection(task)
+    PrioritySection(state, onSetPriority)
     if (state.subtasks.isNotEmpty()) SubtasksSection(state, onCompleteSubtask, onUndo)
     StatusSection(state, onSetStatus)
     Actions(state, onCompleteTask, onUndo, onOpenInClickUp)
   }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MetaRow(state: DetailUiState) {
   val task = state.task
-  val due = remember(task.dueMs, state.nowMs) { TaskLogic.dueInfo(task.dueMs, state.nowMs) }
-  val showPriority = task.priority != Priority.NONE
-  if (due == null && !showPriority && task.tags.isEmpty()) return
-  FlowRow(
-    modifier = Modifier.padding(top = 12.dp),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp),
-  ) {
-    if (due != null) DueChip(due, DetailFormat.dueChipLabel(due, task.dueMs), large = true)
-    if (showPriority) {
-      Text(
-        task.priority.label.uppercase(),
-        modifier = Modifier.padding(vertical = 4.dp),
-        color = Color(DetailFormat.priorityColor(task)),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.6.sp,
-      )
-    }
-    task.tags.forEach { tag ->
-      Text(
-        tag,
-        modifier = Modifier
-          .clip(RoundedCornerShape(50))
-          .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-          .padding(horizontal = 10.dp, vertical = 4.dp),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-    }
+  val due = remember(task.dueMs, state.nowMs) { TaskLogic.dueInfo(task.dueMs, state.nowMs) } ?: return
+  Box(Modifier.padding(top = 12.dp)) {
+    DueChip(due, DetailFormat.dueChipLabel(due, task.dueMs), large = true)
   }
 }
 
@@ -250,29 +228,140 @@ private fun DueChip(due: DueInfo, label: String, large: Boolean = false) {
 private fun Description(state: DetailUiState) {
   var expanded by rememberSaveable(state.task.id) { mutableStateOf(false) }
   val muted = MaterialTheme.colorScheme.onSurfaceVariant
-  when {
-    state.detailLoading -> Text(
-      stringResource(R.string.detail_loading),
-      modifier = Modifier.padding(top = 12.dp),
-      style = MaterialTheme.typography.bodyMedium,
-      color = muted,
-    )
-    state.detailFailed -> Text(
-      stringResource(R.string.detail_load_failed),
-      modifier = Modifier.padding(top = 12.dp),
-      style = MaterialTheme.typography.bodySmall,
-      color = muted,
-    )
-    else -> {
-      val d = DetailFormat.description(state.description, expanded)
-      if (d.text.isEmpty()) return
-      Text(d.text, modifier = Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium)
-      if (d.collapsible) {
-        TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
-          Text(stringResource(if (expanded) R.string.detail_show_less else R.string.detail_show_more))
+  Column(Modifier.padding(top = 20.dp)) {
+    SectionLabel(stringResource(R.string.detail_description))
+    Spacer(Modifier.size(6.dp))
+    when {
+      state.detailLoading -> Text(stringResource(R.string.detail_loading), style = MaterialTheme.typography.bodyMedium, color = muted)
+      state.detailFailed -> Text(stringResource(R.string.detail_load_failed), style = MaterialTheme.typography.bodySmall, color = muted)
+      else -> {
+        val d = DetailFormat.description(state.description, expanded)
+        if (d.text.isEmpty()) {
+          Text(stringResource(R.string.detail_no_description), style = MaterialTheme.typography.bodyMedium, color = muted)
+        } else {
+          Text(d.text, style = MaterialTheme.typography.bodyMedium)
+          if (d.collapsible) {
+            TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+              Text(stringResource(if (expanded) R.string.detail_show_less else R.string.detail_show_more))
+            }
+          }
         }
       }
     }
+  }
+}
+
+@Composable
+private fun FieldsSection(fields: List<TaskField>, taskId: String) {
+  Column(Modifier.padding(top = 20.dp)) {
+    SectionLabel(stringResource(R.string.detail_fields))
+    fields.forEachIndexed { i, f ->
+      if (f.name.isNotBlank() && f.value.isNotBlank()) FieldRow(f, "$taskId:$i", Modifier.padding(top = 10.dp))
+    }
+  }
+}
+
+/** One field: muted name over its value (color dot when [TaskField.colorHex]); long values expand. */
+@Composable
+private fun FieldRow(field: TaskField, key: String, modifier: Modifier = Modifier) {
+  var expanded by rememberSaveable(key) { mutableStateOf(false) }
+  var overflows by remember(key) { mutableStateOf(false) }
+  Column(modifier.fillMaxWidth()) {
+    Text(field.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(verticalAlignment = Alignment.Top) {
+      if (field.colorHex != null) {
+        Box(
+          Modifier
+            .padding(top = 6.dp, end = 8.dp)
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(argb(field.colorHex)),
+        )
+      }
+      Text(
+        field.value,
+        modifier = Modifier.weight(1f),
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = if (expanded) Int.MAX_VALUE else DetailFormat.FIELD_MAX_LINES,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow },
+      )
+    }
+    if (overflows || expanded) {
+      TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+        Text(stringResource(if (expanded) R.string.detail_show_less else R.string.detail_show_more))
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagsSection(task: TaskItem) {
+  Column(Modifier.padding(top = 20.dp)) {
+    SectionLabel(stringResource(R.string.detail_tags))
+    Spacer(Modifier.size(8.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      task.tags.forEach { tag ->
+        val color = DetailFormat.tagColor(task, tag)?.let { Color(it) }
+        Text(
+          tag,
+          modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color ?: MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+          style = MaterialTheme.typography.labelMedium,
+          color = if (color != null) onColor(color) else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+    }
+  }
+}
+
+private fun onColor(bg: Color): Color = if (bg.luminance() < 0.5f) Color.White else Color(0xFF111111)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PrioritySection(state: DetailUiState, onSetPriority: (Priority) -> Unit) {
+  Column(Modifier.padding(top = 20.dp)) {
+    SectionLabel(stringResource(R.string.detail_priority_heading))
+    Spacer(Modifier.size(8.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      DetailFormat.priorityChoices.forEach { p ->
+        PriorityPill(
+          priority = p,
+          current = DetailFormat.isCurrentPriority(p, state.task.priority),
+          saving = state.savingPriority == p,
+          busy = state.priorityBusy,
+          onClick = { onSetPriority(p) },
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun PriorityPill(priority: Priority, current: Boolean, saving: Boolean, busy: Boolean, onClick: () -> Unit) {
+  val color = Color(priority.chipColor)
+  val textColor = if (current) onColor(color) else MaterialTheme.colorScheme.onSurface
+  Row(
+    Modifier
+      .alpha(if (busy && !saving && !current) 0.5f else if (saving) 0.7f else 1f)
+      .clip(RoundedCornerShape(50))
+      .background(if (current) color else color.copy(alpha = 0.14f))
+      .clickable(enabled = !busy && !current, role = Role.Button, onClick = onClick)
+      .padding(horizontal = 12.dp, vertical = 7.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Box(Modifier.size(8.dp).clip(CircleShape).background(if (current) textColor else color))
+    Spacer(Modifier.width(6.dp))
+    Text(
+      priority.label.uppercase(),
+      style = MaterialTheme.typography.labelMedium,
+      fontWeight = FontWeight.Bold,
+      letterSpacing = 0.4.sp,
+      color = textColor,
+    )
   }
 }
 
