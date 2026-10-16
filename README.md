@@ -9,12 +9,13 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
 - **Direct ClickUp API connection** — no companion service needed; just your personal API token
 - **Interactive (touch)**:
   - Tap the **header** → reveal the filter bar and toggle which **statuses** and **priorities** to show (multi-select chips)
-  - Tap a task → details view with description, due date, priority, tags, and the list's status pills — tap a pill to change the task's status (PUT to ClickUp)
+  - Tap a task → details view with the full **description** (read-only, line breaks kept, scrolls if long), its populated **fields** (assignees, start date, time estimate, sprint points, created, plus every filled-in custom field — drop-downs show their color dot), **tags**, the list's **status** pills and **priority** pills (Urgent / High / Normal / Low / None) — tap a status or priority pill to change it (PUT to ClickUp; priority updates instantly, with a toast, and reverts if ClickUp rejects it)
   - Tap a task with **subtasks** → the details view lists them with an *X of Y done* progress count; completed subtasks are dimmed and struck through, and you can tap a subtask's circle to quick-complete it (same **Undo** toast)
   - Tap a task's circle → quick-complete with a 3-second **Undo** toast before it commits
   - Task list scrolls by touch when it overflows
 - **My Tasks mode** (default): every open task assigned to you across the workspace, ordered by due date then priority
 - **List mode**: point it at a single ClickUp list via List ID
+- **Every page of tasks**: ClickUp returns 100 tasks per page; the widget follows `last_page` (up to 10 pages / 1,000 tasks) for the task list and for subtask lookups, so large accounts are no longer truncated to the first 100
 - **Filters**:
   - **Due**: all open tasks, due today + overdue, or due this week
   - **Priority**: in-widget multi-select chips (Urgent / High / Normal / Low / None), seeded by a **Priority (default)** setting (All / Urgent only / High and up / Normal and up)
@@ -22,6 +23,7 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
   - Chips are independent toggles — selecting none *or* all of a row means "show everything" for that row; an accent dot by the header shows when a filter is narrowing the list
 - **Due chips**: red *Overdue*, pink *Today*, amber *Tomorrow / this week*, muted dates beyond
 - **Priority stars**: filled accent star for `urgent` / `high` tasks
+- **Priority and tags in every row**: a small flag + label in the ClickUp priority color (only when a priority is set), and up to three tag chips in the tag's own ClickUp color with a `+N` overflow — tags sit on their own line, so rows stay tidy at every Xeneon Edge size
 - **Offline resilience**: keeps showing the last good data with an `offline` tag if the network drops
 - **Responsive**: all Xeneon Edge slot sizes — S/M/L/XL, horizontal (multi-column on L/XL) and vertical
 - **Personalization**: text/accent/background colors, background image with glass blur, transparency
@@ -79,12 +81,13 @@ Copy this folder into your iCUE widgets directory and restart iCUE.
 
 ## Privacy
 
-The widget talks **only** to `https://api.clickup.com` over HTTPS using your token (GET for reading, PUT only when you change a status). No other endpoints, no analytics, no storage outside iCUE widget settings.
+The widget talks **only** to `https://api.clickup.com` over HTTPS using your token (GET for reading, PUT only when you change a status or priority). No other endpoints, no analytics, no storage outside iCUE widget settings.
 
 ## Roadmap
 
 - Tag / space filters (status + priority filters shipped in v1.2.0)
 - Create task from the widget
+- Edit tags and custom fields (shown read-only since v1.4.0; priority editing shipped in v1.4.0)
 
 ## License
 
