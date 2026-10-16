@@ -58,6 +58,8 @@ data class TaskItem(
   /** Web URL of the task (https://app.clickup.com/t/<id>). */
   val url: String? = null,
   val parentId: String? = null,
+  /** Workspace (team) id the task belongs to */
+  val teamId: String? = null,
 ) {
   /** True when the task's status type is closed/done. */
   val isDone: Boolean get() = statusType == "closed" || statusType == "done"

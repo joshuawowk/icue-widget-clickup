@@ -41,10 +41,13 @@ class ClickUpApi(
   private val baseUrl: String,
   private val tokenProvider: () -> String?,
   private val client: OkHttpClient,
+  private val clock: () -> Long = System::currentTimeMillis,
 ) {
   private class Identity(val userId: Long, val username: String, val email: String, val teams: List<Workspace>)
 
-  private val statusCache = ConcurrentHashMap<String, List<TaskStatus>>()
+  private class CachedStatuses(val statuses: List<TaskStatus>, val loadedAt: Long)
+
+  private val statusCache = ConcurrentHashMap<String, CachedStatuses>()
   @Volatile private var identity: Identity? = null
   @Volatile private var cachedFor: String? = null
 
@@ -103,10 +106,10 @@ class ClickUpApi(
     return TaskFetch(tasks, workspaceName(id.teams, workspaceId).orEmpty(), emptyList())
   }
 
-  /** Statuses of a list in configured order; cached per list id. */
+  /** Statuses of a list in configured order; cached per list id for [STATUS_TTL_MS]. */
   suspend fun listStatuses(listId: String): List<TaskStatus> {
     checkToken()
-    statusCache[listId]?.let { return it }
+    statusCache[listId]?.let { if (clock() - it.loadedAt < STATUS_TTL_MS) return it.statuses }
     val statuses = getJson(path("list", listId))
       .array("statuses").mapNotNull { s ->
         val o = s.asObject() ?: return@mapNotNull null
@@ -119,7 +122,7 @@ class ClickUpApi(
         )
       }
       .sortedBy { it.orderIndex }
-    statusCache[listId] = statuses
+    statusCache[listId] = CachedStatuses(statuses, clock())
     return statuses
   }
 
@@ -163,17 +166,23 @@ class ClickUpApi(
   suspend fun completeTask(taskId: String, listId: String) {
     val closed = TaskLogic.findClosedStatus(listStatuses(listId))
       ?: throw IllegalStateException("No closed status on list")
-    setStatus(taskId, closed.name)
+    setStatus(taskId, closed.name, listId)
   }
 
-  suspend fun setStatus(taskId: String, status: String) {
+  /** On [ClickUpApiException] the cached statuses ([listId]'s, or all if unknown) are dropped, so a renamed status recovers. */
+  suspend fun setStatus(taskId: String, status: String, listId: String? = null) {
     val token = checkToken()
     val body = buildJsonObject { put("status", status) }.toString().toRequestBody(JSON_MEDIA)
-    execute(authed(path("task", taskId), token).put(body).build()) { }
+    try {
+      execute(authed(path("task", taskId), token).put(body).build()) { }
+    } catch (e: ClickUpApiException) {
+      if (listId != null) statusCache.remove(listId) else statusCache.clear()
+      throw e
+    }
   }
 
   private suspend fun fetchSubtasksViaParent(parent: TaskItem): List<TaskItem> {
-    val teamId = identity().teams.firstOrNull()?.id ?: return emptyList()
+    val teamId = parent.teamId ?: identity().teams.firstOrNull()?.id ?: return emptyList()
     return getJson(path("team", teamId, "task") {
       addQueryParameter("parent", parent.id)
       addQueryParameter("subtasks", "true")
@@ -262,12 +271,14 @@ class ClickUpApi(
 
   companion object {
     private const val MAX_DESCRIPTION = 4000
+    private const val STATUS_TTL_MS = 10 * 60 * 1000L
+    private const val UNTITLED = "(untitled)"
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     private val JSON = Json { ignoreUnknownKeys = true; isLenient = true }
 
     /**
      * ClickUp task JSON → [TaskItem], leniently. Subtasks carry `list: null`; when [inherit] is given,
-     * its listId/listName fill the gap. Returns null for objects without an id.
+     * its listId/listName/teamId fill the gap. Returns null for objects without an id.
      */
     internal fun shapeTask(e: JsonElement, inherit: TaskItem? = null): TaskItem? {
       val o = e.asObject() ?: return null
@@ -277,7 +288,7 @@ class ClickUpApi(
       val priority = o["priority"].asObject()
       return TaskItem(
         id = id,
-        name = o.str("name").orEmpty(),
+        name = o.str("name")?.takeIf { it.isNotBlank() } ?: UNTITLED,
         listId = list?.str("id") ?: inherit?.listId,
         listName = list?.str("name") ?: inherit?.listName.orEmpty(),
         dueMs = o.long("due_date")?.takeIf { it > 0 },
@@ -289,6 +300,7 @@ class ClickUpApi(
         tags = o.array("tags").mapNotNull { it.asObject()?.str("name") },
         url = o.str("url"),
         parentId = o.str("parent"),
+        teamId = o.str("team_id") ?: inherit?.teamId,
       )
     }
   }

@@ -2,9 +2,12 @@ package net.jwowk.clickupwidget.data
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
+import java.security.UnrecoverableKeyException
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -22,12 +25,14 @@ class TokenStore(context: Context) {
   private val lock = Any()
   private var cached: String? = null
   private var cacheLoaded = false
+  private var transientFailure = false
 
   /** The decrypted token, or null if none is stored (or the Keystore key was invalidated, which clears it). */
   fun token(): String? = synchronized(lock) {
     if (!cacheLoaded) {
+      transientFailure = false
       cached = readToken()
-      cacheLoaded = true
+      if (!transientFailure) cacheLoaded = true
     }
     cached
   }
@@ -60,16 +65,25 @@ class TokenStore(context: Context) {
     prefs.edit().apply { if (label == null) remove(KEY_LABEL) else putString(KEY_LABEL, label) }.apply()
   }
 
+  /** Null if none stored, or (token kept, cache not marked loaded) on a transient error; wipes only if the blob/key is provably unusable. */
   private fun readToken(): String? {
     val blob = prefs.getString(KEY_TOKEN, null) ?: return null
     return try {
       decrypt(blob)
     } catch (e: Exception) {
-      prefs.edit().remove(KEY_TOKEN).remove(KEY_LABEL).apply()
-      deleteKey()
+      if (isUnusable(e)) {
+        prefs.edit().remove(KEY_TOKEN).remove(KEY_LABEL).apply()
+        deleteKey()
+      } else {
+        transientFailure = true
+      }
       null
     }
   }
+
+  private fun isUnusable(e: Exception): Boolean =
+    e is AEADBadTagException || e is IllegalArgumentException || e is UnrecoverableKeyException ||
+      e is KeyPermanentlyInvalidatedException || e is MissingKeyException
 
   private fun encrypt(plain: String): String {
     val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -84,7 +98,7 @@ class TokenStore(context: Context) {
     val cipher = Cipher.getInstance(TRANSFORMATION)
     cipher.init(
       Cipher.DECRYPT_MODE,
-      getOrCreateKey(),
+      existingKey() ?: throw MissingKeyException(),
       GCMParameterSpec(TAG_BITS, bytes, 0, IV_BYTES),
     )
     return String(cipher.doFinal(bytes, IV_BYTES, bytes.size - IV_BYTES), Charsets.UTF_8)
@@ -92,8 +106,10 @@ class TokenStore(context: Context) {
 
   private fun keyStore(): KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
+  private fun existingKey(): SecretKey? = keyStore().getKey(KEY_ALIAS, null) as? SecretKey
+
   private fun getOrCreateKey(): SecretKey {
-    (keyStore().getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+    existingKey()?.let { return it }
     val spec = KeyGenParameterSpec.Builder(
       KEY_ALIAS,
       KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
@@ -113,6 +129,9 @@ class TokenStore(context: Context) {
     } catch (_: Exception) {
     }
   }
+
+  /** The Keystore holds no key to decrypt with: the stored blob can never be read. */
+  private class MissingKeyException : Exception("No Keystore key")
 
   private companion object {
     const val PREFS = "secure_prefs"
