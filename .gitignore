@@ -2,3 +2,4 @@
 *.icuewidget
 .DS_Store
 .claude/worktrees/
+/dev/out/

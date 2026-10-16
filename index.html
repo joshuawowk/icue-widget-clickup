@@ -114,16 +114,33 @@
         <div class="detail-scroll">
           <div class="detail-title" id="detailTitle"></div>
           <div class="detail-meta" id="detailMeta"></div>
-          <div class="detail-desc" id="detailDesc"></div>
+
+          <div class="detail-section-label">Status</div>
+          <div class="detail-statuses" id="detailStatuses">
+            <div class="statuses-loading">Loading statuses…</div>
+          </div>
+
+          <div class="detail-section-label">Priority</div>
+          <div class="detail-statuses" id="detailPriorities"></div>
+
+          <div class="detail-tags-section" id="detailTagsSection" style="display:none;">
+            <div class="detail-section-label">Tags</div>
+            <div class="detail-tags" id="detailTags"></div>
+          </div>
 
           <div class="detail-subtasks" id="detailSubtasksSection" style="display:none;">
             <div class="detail-section-label">Subtasks <span class="subtask-progress" id="subtaskProgress"></span></div>
             <div class="subtask-list" id="detailSubtasks"></div>
           </div>
 
-          <div class="detail-section-label">Status</div>
-          <div class="detail-statuses" id="detailStatuses">
-            <div class="statuses-loading">Loading statuses…</div>
+          <div class="detail-desc-section" id="detailDescSection" style="display:none;">
+            <div class="detail-section-label">Description</div>
+            <div class="detail-desc" id="detailDesc"></div>
+          </div>
+
+          <div class="detail-fields-section" id="detailFieldsSection" style="display:none;">
+            <div class="detail-section-label">Fields</div>
+            <div class="detail-fields" id="detailFields"></div>
           </div>
         </div>
       </div>
@@ -243,7 +260,8 @@
     }
 
     /* ---------- ClickUp API ---------- */
-    const API = 'https://api.clickup.com/api/v2';
+    // CLICKUP_API_BASE is a development hook (point the widget at a local mock); iCUE never sets it.
+    const API = (typeof CLICKUP_API_BASE === 'string' && CLICKUP_API_BASE) || 'https://api.clickup.com/api/v2';
     let cachedIdentity = null;   // { token, userId, teamId, teamName }
     let lastGoodTasks = null;
     let refreshTimer = null;
@@ -310,6 +328,25 @@
       return res.json();
     }
 
+    // ClickUp returns at most 100 tasks per page ("last_page": true on the final one) and the
+    // first page alone silently drops the rest of a big account. `path` already carries a query
+    // string; follow &page=N until last_page / a short page, capped at MAX_PAGES (dedupe by id).
+    const PAGE_SIZE = 100;
+    const MAX_PAGES = 10;
+    async function fetchAllPages(token, path) {
+      const seen = new Set();
+      const all = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const data = await cuFetch(token, path + '&page=' + page);
+        const batch = data.tasks || [];
+        batch.forEach(t => {
+          if (!seen.has(t.id)) { seen.add(t.id); all.push(t); }
+        });
+        if (data.last_page === true || batch.length < PAGE_SIZE) break;
+      }
+      return all;
+    }
+
     async function resolveIdentity(token) {
       if (cachedIdentity && cachedIdentity.token === token) return cachedIdentity;
       const [user, teams] = await Promise.all([cuFetch(token, '/user'), cuFetch(token, '/team')]);
@@ -359,18 +396,16 @@
         const listIdSetting = (getIcueProperty('listId') || '').toString().trim();
         let tasks = [];
         if (listIdSetting) {
-          const data = await cuFetch(token, '/list/' + encodeURIComponent(listIdSetting) +
+          tasks = await fetchAllPages(token, '/list/' + encodeURIComponent(listIdSetting) +
             '/task?include_closed=false&subtasks=false');
-          tasks = data.tasks || [];
           const id = await resolveIdentity(token).catch(() => null);
           if (id) cachedIdentity = id;
           // Cache the list's status order so chips follow the list's configured order.
           await getListStatuses(listIdSetting).catch(() => {});
         } else {
           const id = await resolveIdentity(token);
-          const data = await cuFetch(token, '/team/' + id.teamId +
+          tasks = await fetchAllPages(token, '/team/' + id.teamId +
             '/task?assignees[]=' + id.userId + '&include_closed=false&subtasks=false&order_by=due_date');
-          tasks = data.tasks || [];
         }
         lastGoodTasks = tasks;
         renderTasks(tasks, false);
@@ -409,9 +444,45 @@
         status: (t.status && t.status.status) || '',
         statusColor: (t.status && t.status.color) || '#888888',
         statusType: (t.status && t.status.type) || '',
-        tags: (t.tags || []).map(x => x.name)
+        tags: (t.tags || []).map(x => ({ name: x.name, bg: x.tag_bg || null }))
       };
     }
+
+    /* ---------- Priority + tag chips (shared by rows and details) ---------- */
+    // Black or white, whichever reads better on the tag's own background color.
+    function readableOn(hex) {
+      let h = String(hex || '').replace('#', '');
+      if (h.length === 3) h = h.replace(/(.)/g, '$1$1');
+      if (!/^[0-9a-f]{6}$/i.test(h)) return '#ffffff';
+      const c = [0, 2, 4].map(i => {
+        const v = parseInt(h.substr(i, 2), 16) / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      return lum > 0.4 ? '#111111' : '#ffffff';
+    }
+
+    function makeTagChip(tag) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.textContent = tag.name;
+      if (tag.bg) {
+        chip.style.background = tag.bg;
+        chip.style.color = readableOn(tag.bg);
+      }
+      return chip;
+    }
+
+    // Small flag glyph + label in the ClickUp priority color. Only call when a priority is set.
+    function makePrioLabel(prio) {
+      const el = document.createElement('span');
+      el.className = 'prio-label';
+      el.style.color = PRIO_COLOR[prio] || 'inherit';
+      el.textContent = PRIO_LABEL[prio] || prio;
+      return el;
+    }
+
+    const ROW_TAG_LIMIT = 3;
 
     let lastOffline = false;
 
@@ -549,8 +620,22 @@
           chip.textContent = t.due.label;
           meta.appendChild(chip);
         }
+        if (t.prio) meta.appendChild(makePrioLabel(t.prio));
         main.appendChild(name);
         main.appendChild(meta);
+        // Tags get their own line so a long list/due/priority row never pushes them off-screen.
+        if (t.tags.length) {
+          const tagLine = document.createElement('div');
+          tagLine.className = 'task-tags';
+          t.tags.slice(0, ROW_TAG_LIMIT).forEach(tag => tagLine.appendChild(makeTagChip(tag)));
+          if (t.tags.length > ROW_TAG_LIMIT) {
+            const more = document.createElement('span');
+            more.className = 'tag-more';
+            more.textContent = '+' + (t.tags.length - ROW_TAG_LIMIT);
+            tagLine.appendChild(more);
+          }
+          main.appendChild(tagLine);
+        }
 
         const star = document.createElement('span');
         star.className = 'prio-star' + ((t.prio === 'urgent' || t.prio === 'high') ? ' prio-on' : '');
@@ -741,21 +826,19 @@
           ? '' : (task.dueMs ? ' • ' + fmtFullDue(task.dueMs) : ''));
         meta.appendChild(chip);
       }
-      if (task.prio) {
-        const p = document.createElement('span');
-        p.className = 'prio-badge';
-        p.textContent = task.prio.toUpperCase();
-        if (task.prioColor) p.style.color = task.prioColor;
-        meta.appendChild(p);
-      }
-      task.tags.forEach(tag => {
-        const tg = document.createElement('span');
-        tg.className = 'tag-badge';
-        tg.textContent = tag;
-        meta.appendChild(tg);
-      });
 
+      // Priority + tags are already on the list payload, so these render instantly.
+      renderPriorityButtons(task);
+      const tagsWrap = document.getElementById('detailTags');
+      tagsWrap.innerHTML = '';
+      task.tags.forEach(tag => tagsWrap.appendChild(makeTagChip(tag)));
+      document.getElementById('detailTagsSection').style.display = task.tags.length ? '' : 'none';
+
+      // Description + fields come from the full task fetch; hide them until it lands.
       document.getElementById('detailDesc').textContent = '';
+      document.getElementById('detailDescSection').style.display = 'none';
+      document.getElementById('detailFields').innerHTML = '';
+      document.getElementById('detailFieldsSection').style.display = 'none';
       const subSection = document.getElementById('detailSubtasksSection');
       if (subSection) subSection.style.display = 'none';
       document.getElementById('detailSubtasks').innerHTML = '';
@@ -765,10 +848,12 @@
 
       const token = getIcueProperty('apiToken');
 
-      // Description + subtasks (best-effort) and statuses in parallel.
+      // Description, fields + subtasks (best-effort) and statuses in parallel.
       fetchDetail(token, task).then(d => {
         if (detailTask !== task) return;   // user navigated away meanwhile
-        document.getElementById('detailDesc').textContent = d.desc ? d.desc.slice(0, 600) : '';
+        document.getElementById('detailDesc').textContent = d.desc;
+        document.getElementById('detailDescSection').style.display = d.desc ? '' : 'none';
+        renderFields(d.fields);
         renderSubtasks(d.subs, task);
       });
 
@@ -817,6 +902,196 @@
       });
     }
 
+    /* ---------- Priority editing (in detail view) ---------- */
+    const PRIO_API = { urgent: 1, high: 2, normal: 3, low: 4 };   // PUT /task/{id} {"priority": n | null}
+
+    // Keep the cached list payload in step so re-renders (filters, offline fallback) agree.
+    function patchCachedPriority(taskId, prio) {
+      const raw = (lastGoodTasks || []).find(t => t.id === taskId);
+      if (raw) raw.priority = prio ? { priority: prio, color: PRIO_COLOR[prio] } : null;
+    }
+
+    function renderPriorityButtons(task) {
+      const wrap = document.getElementById('detailPriorities');
+      wrap.innerHTML = '';
+      PRIO_ORDER.forEach(key => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.prio = key;
+        btn.className = 'status-pill' + (prioKey(task) === key ? ' current' : '');
+        btn.style.setProperty('--pill-color', PRIO_COLOR[key]);
+        if (prioKey(task) === key) btn.style.color = readableOn(PRIO_COLOR[key]);   // light fills (High, Low) need dark text
+        const dot = document.createElement('span');
+        dot.className = 'pill-dot';
+        const label = document.createElement('span');
+        label.textContent = PRIO_LABEL[key].toUpperCase();
+        btn.appendChild(dot);
+        btn.appendChild(label);
+        btn.addEventListener('click', function () {
+          if (btn.classList.contains('current') || wrap.classList.contains('busy')) return;
+          changePriority(task, key);
+        });
+        wrap.appendChild(btn);
+      });
+    }
+
+    function applyPriority(task, prio) {
+      task.prio = prio;
+      task.prioColor = prio ? PRIO_COLOR[prio] : undefined;
+      task.prioRank = prio ? PRIO_ORDER.indexOf(prio) : PRIO_ORDER.length - 1;
+      patchCachedPriority(task.id, prio);
+    }
+
+    async function changePriority(task, key) {
+      const wrap = document.getElementById('detailPriorities');
+      const prev = task.prio;
+      const next = key === 'none' ? undefined : key;
+      // Optimistic: flip the pills immediately, revert on failure.
+      applyPriority(task, next);
+      renderPriorityButtons(task);
+      wrap.classList.add('busy');
+      try {
+        await cuFetch(getIcueProperty('apiToken'), '/task/' + encodeURIComponent(task.id), {
+          method: 'PUT',
+          body: JSON.stringify({ priority: next ? PRIO_API[next] : null })
+        });
+        showToast(next ? 'Priority → ' + PRIO_LABEL[next].toUpperCase() : 'Priority cleared', null, null, 2200);
+        loadTasks();
+      } catch (e) {
+        console.error('Priority change failed:', e);
+        applyPriority(task, prev);
+        if (detailTask === task) renderPriorityButtons(task);
+        showToast('Could not change priority — try again', null, null, 4000);
+      } finally {
+        wrap.classList.remove('busy');
+      }
+    }
+
+    /* ---------- Task fields (read-only, in detail view) ---------- */
+    // Mirrors the Android app's field formatting so both widgets show the same text.
+    function fmtFieldDate(ms) {
+      const n = Number(ms);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      return new Date(n).toLocaleDateString(languageCode,
+        { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function fmtEstimate(ms) {
+      const mins = Math.round(Number(ms) / 60000);
+      if (!Number.isFinite(mins) || mins <= 0) return null;
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '');
+    }
+
+    function isEmptyFieldValue(v) {
+      return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+    }
+
+    // Display string, {value, color} (drop-down), or null to skip, for one custom field.
+    function formatCustomField(f) {
+      const v = f.value;
+      if (isEmptyFieldValue(v)) return null;
+      const cfg = f.type_config || {};
+      const options = Array.isArray(cfg.options) ? cfg.options : [];
+      const joinNames = (list, pick) => {
+        const out = (Array.isArray(list) ? list : []).map(pick)
+          .filter(x => x !== undefined && x !== null && String(x).trim() !== '');
+        return out.length ? out.join(', ') : null;
+      };
+      switch (f.type) {
+        case 'text': case 'short_text': case 'email': case 'phone': case 'url': {
+          const s = String(v).trim();
+          return s || null;
+        }
+        case 'number': return String(v);
+        case 'currency': return (cfg.currency_type ? cfg.currency_type + ' ' : '') + v;
+        case 'drop_down': {
+          // Value is the option's orderindex (number) or, on some payloads, its id.
+          let opt = options.find(o => o.id === v);
+          if (!opt && Number.isFinite(Number(v))) opt = options.find(o => Number(o.orderindex) === Number(v));
+          return opt ? { value: opt.name, color: opt.color || null } : null;
+        }
+        case 'labels': {
+          const byId = new Map(options.map(o => [o.id, o.label || o.name]));
+          return joinNames(v, id => byId.get(id));
+        }
+        case 'date': return fmtFieldDate(v);
+        case 'checkbox': return (v === true || v === 'true') ? 'Yes' : null;
+        case 'users': return joinNames(v, u => u && u.username);
+        case 'tasks': return joinNames(v, t => t && t.name);
+        case 'emoji': {
+          const n = Math.floor(Number(v));
+          if (!Number.isFinite(n) || n < 0) return null;
+          const total = Math.max(n, Math.floor(Number(cfg.count)) || 0);
+          return '★'.repeat(n) + '☆'.repeat(total - n);
+        }
+        case 'automatic_progress': case 'manual_progress': {
+          const pct = v && (v.percent_complete !== undefined ? v.percent_complete : v.percent_completed);
+          const n = Math.round(Number(pct));
+          return Number.isFinite(n) && n > 0 ? n + '%' : null;
+        }
+        case 'location': return (v && v.formatted_address) ? String(v.formatted_address) : null;
+        case 'formula': return String(v);
+        case 'attachment': return Array.isArray(v) ? v.length + ' file(s)' : null;
+        default: {
+          if (typeof v === 'object') return null;
+          const s = String(v).trim();
+          return s || null;
+        }
+      }
+    }
+
+    // Ordered list of populated fields [{name, value, color?}] for a full ClickUp task object.
+    function formatTaskFields(t) {
+      const out = [];
+      const add = (name, value, color) => out.push(color ? { name: name, value: value, color: color } : { name: name, value: value });
+
+      const assignees = (t.assignees || []).map(a => a && a.username).filter(Boolean).join(', ');
+      if (assignees) add('Assignees', assignees);
+      const start = fmtFieldDate(t.start_date);
+      if (start) add('Start date', start);
+      const est = fmtEstimate(t.time_estimate);
+      if (est) add('Time estimate', est);
+      if (t.points !== null && t.points !== undefined && t.points !== '') add('Sprint points', String(t.points));
+      const created = fmtFieldDate(t.date_created);
+      if (created) add('Created', created + (t.creator && t.creator.username ? ' by ' + t.creator.username : ''));
+
+      (t.custom_fields || []).forEach(f => {
+        const r = formatCustomField(f);
+        if (r === null || r === undefined) return;
+        if (typeof r === 'string') add(f.name, r);
+        else add(f.name, r.value, r.color);
+      });
+      return out;
+    }
+
+    function renderFields(fields) {
+      const section = document.getElementById('detailFieldsSection');
+      const wrap = document.getElementById('detailFields');
+      wrap.innerHTML = '';
+      if (!fields || !fields.length) { section.style.display = 'none'; return; }
+      fields.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'field-item';
+        const label = document.createElement('div');
+        label.className = 'field-name';
+        label.textContent = f.name;
+        const value = document.createElement('div');
+        value.className = 'field-value';
+        if (f.color) {
+          const dot = document.createElement('span');
+          dot.className = 'field-dot';
+          dot.style.background = f.color;
+          value.appendChild(dot);
+        }
+        value.appendChild(document.createTextNode(f.value));
+        item.appendChild(label);
+        item.appendChild(value);
+        wrap.appendChild(item);
+      });
+      section.style.display = '';
+    }
+
     /* ---------- Subtasks (in detail view) ---------- */
     // Primary source: GET /task/{id}?include_subtasks=true → `subtasks` on the parent.
     // Some workspaces return no `subtasks` array from that endpoint, so fall back to
@@ -825,16 +1100,17 @@
     async function fetchSubtasksViaParent(token, parent) {
       const id = await resolveIdentity(token);
       if (!id.teamId) return [];
-      const data = await cuFetch(token, '/team/' + id.teamId +
+      const tasks = await fetchAllPages(token, '/team/' + id.teamId +
         '/task?parent=' + encodeURIComponent(parent.id) + '&subtasks=true&include_closed=true');
-      return (data.tasks || []).filter(t => t.parent === parent.id);   // direct children only
+      return tasks.filter(t => t.parent === parent.id);   // direct children only
     }
 
     async function fetchDetail(token, task) {
-      let desc = '', subs = [];
+      let desc = '', subs = [], fields = [];
       try {
         const full = await cuFetch(token, '/task/' + encodeURIComponent(task.id) + '?include_subtasks=true');
         desc = (full.text_content || full.description || '').trim();
+        fields = formatTaskFields(full);
         subs = (full.subtasks || []).filter(s => !s.parent || s.parent === task.id);
       } catch (e) {
         console.error('Task detail fetch failed:', e);
@@ -843,7 +1119,7 @@
         try { subs = await fetchSubtasksViaParent(token, task); }
         catch (e) { console.error('Subtask fallback fetch failed:', e); }
       }
-      return { desc: desc, subs: subs };
+      return { desc: desc, subs: subs, fields: fields };
     }
 
     function isDoneType(type) { return type === 'closed' || type === 'done'; }
