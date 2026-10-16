@@ -130,6 +130,8 @@ internal fun StyleSection(vm: ConfigViewModel) {
     SwitchRow(stringResource(R.string.ui_show_list_name), config.showListName, { v -> vm.update { it.copy(showListName = v) } })
     SwitchRow(stringResource(R.string.ui_show_due_chip), config.showDueChip, { v -> vm.update { it.copy(showDueChip = v) } })
     SwitchRow(stringResource(R.string.ui_show_priority_star), config.showPriorityStar, { v -> vm.update { it.copy(showPriorityStar = v) } })
+    SwitchRow(stringResource(R.string.ui_show_priority), config.showPriority, { v -> vm.update { it.copy(showPriority = v) } })
+    SwitchRow(stringResource(R.string.ui_show_tags), config.showTags, { v -> vm.update { it.copy(showTags = v) } })
 
     BackgroundImageControls(vm)
 
