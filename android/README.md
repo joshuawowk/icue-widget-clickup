@@ -21,23 +21,28 @@ ClickUp API with your personal token — no companion service.
 ## Features
 
 - **Same function and form as the iCUE widget** — header with title, workspace and task count;
-  due chips; priority stars; list names; "+N more"; offline fallback to the last good data
+  due chips; **priority flags** and **tag chips** (in ClickUp's tag colors); priority stars; list names;
+  "+N more"; offline fallback to the last good data
+- Loads **every page** of tasks (ClickUp pages at 100), so large task lists are complete
 - **Interactive**
-  - Tap the **header** → Refresh / Settings / Open ClickUp, and **Status** + **Priority** multi-select chips
+  - Header buttons: **⟳ Refresh** and **+ New task** (name, list, due date, priority, description, assign to me)
+  - Tap the **title** → Settings / Open ClickUp, and **Status** + **Priority** multi-select chips
     (same semantics as iCUE: all or none selected = show everything; an accent dot marks an active filter)
   - Tap a task's **circle** → quick-complete with an **Undo** bar before it's sent to ClickUp
-  - Tap a **task** → details sheet: description, due date, priority, tags, **subtasks** (X of Y done,
-    quick-complete with Undo) and **status pills** to change the task's status; Open in ClickUp
+  - Tap a **task** → details sheet: **description**, populated **fields** (assignees, dates, estimate, points
+    and your custom fields — drop-downs, dates, text, numbers, progress…), **tags**, **priority** (tap to
+    change), **subtasks** (X of Y done, quick-complete with Undo), **status pills**; Open in ClickUp
 - **My Tasks** (everything assigned to you) or a **single list** (picked from your workspace, or by List ID)
 - **Per-widget settings** — every widget instance has its own source, filters and style
-- **Resizable** from 2×2 upward; the layout adapts (narrow widgets drop list names/stars, short ones the subtitle)
+- **Resizable** from 2×2 upward; the layout adapts (narrow widgets drop list names, stars, tags and the count;
+  short ones the subtitle; the title always keeps its room)
 - **Style**
   - **System (Material You)** — follows your wallpaper colors and light/dark mode (Android 12+; this is
     not Pixel-only — any Android 12+ phone with dynamic color works, though OEM palettes vary)
   - **ClickUp dark / light / follow dark mode** — the iCUE look
   - **Custom** text / accent / background colors
   - Background opacity, text size (80–140 %), row density, optional background image with blur,
-    and toggles for subtitle, count, list names, due chips and stars
+    and toggles for subtitle, count, list names, due chips, priority, tags and stars
 - **Refresh** every 15 / 30 / 60 / 120 min (Android's background minimum is 15 min) and on demand
 - **States** like the iCUE widget: loading, setup (no token), all clear, filtered-to-zero, error
   (a rejected token says so and opens the app), and `• offline` with the last good data on network errors
@@ -64,6 +69,14 @@ Requires Android 8.0+ (API 26). Material You colors need Android 12+.
    (or use **Add widget to home screen** in the app, where the launcher supports it).
 3. Pick what it shows and how it looks (live preview at the top). Re-open the settings any time:
    tap the widget's title → **Settings**, use your launcher's widget settings, or open the app.
+
+### Filter defaults
+
+- **Show** — all open tasks, due today + overdue, or due this week.
+- **Priority (default)** — which Priority chips start selected (All / Urgent only / High and up / Normal and up).
+- **Default statuses** — which Status chips start selected when the widget loads or after you save its
+  settings. Comma-separated status names (e.g. `In-Progress, Review`); case, spaces and dashes are ignored,
+  so `In-Progress` also matches `in progress`. Blank, or no match, shows every status. Default: `In-Progress`.
 
 ## Privacy
 
