@@ -120,6 +120,7 @@ internal fun SourceSection(vm: ConfigViewModel) {
       singleLine = true,
       label = { Text(stringResource(R.string.ui_default_statuses)) },
       placeholder = { Text(stringResource(R.string.ui_default_statuses_hint)) },
+      supportingText = { Text(stringResource(R.string.ui_default_statuses_help)) },
       keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
       keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
       modifier = Modifier.fillMaxWidth(),
