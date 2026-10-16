@@ -64,6 +64,9 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
       }
     }
   }
+  // TODO(data agent): implement
+  override suspend fun setPriority(taskId: String, priority: net.jwowk.clickupwidget.data.model.Priority): Unit = TODO()
+  override suspend fun createTask(task: net.jwowk.clickupwidget.data.model.NewTask): net.jwowk.clickupwidget.data.model.TaskItem = TODO()
 
   companion object {
     /** Sample tasks for previews (widget picker / config screen) without touching repository state. */

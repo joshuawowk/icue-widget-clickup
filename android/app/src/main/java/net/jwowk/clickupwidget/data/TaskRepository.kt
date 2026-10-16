@@ -2,6 +2,8 @@ package net.jwowk.clickupwidget.data
 
 import net.jwowk.clickupwidget.data.model.AccountInfo
 import net.jwowk.clickupwidget.data.model.ListRef
+import net.jwowk.clickupwidget.data.model.NewTask
+import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.TaskDetail
 import net.jwowk.clickupwidget.data.model.TaskFetch
 import net.jwowk.clickupwidget.data.model.TaskItem
@@ -51,4 +53,10 @@ interface TaskRepository {
 
   /** PUT /task/{id} {"status": status}. */
   suspend fun setStatus(taskId: String, status: String)
+
+  /** PUT /task/{id} {"priority": 1..4} — or {"priority": null} for [Priority.NONE]. */
+  suspend fun setPriority(taskId: String, priority: Priority)
+
+  /** POST /list/{listId}/task; returns the created task (shaped like fetchTasks' items). */
+  suspend fun createTask(task: NewTask): TaskItem
 }

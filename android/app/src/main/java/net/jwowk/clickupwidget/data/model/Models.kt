@@ -7,12 +7,12 @@ import kotlinx.serialization.Serializable
  * Order, labels and chip colors match the iCUE widget (PRIO_ORDER / PRIO_LABEL / PRIO_COLOR).
  */
 @Serializable
-enum class Priority(val key: String, val label: String, val rank: Int, val chipColor: Long) {
-  URGENT("urgent", "Urgent", 0, 0xFFF50000),
-  HIGH("high", "High", 1, 0xFFFFCC00),
-  NORMAL("normal", "Normal", 2, 0xFF6FDDFF),
-  LOW("low", "Low", 3, 0xFFB5BCC9),
-  NONE("none", "None", 4, 0xFF6B7280);
+enum class Priority(val key: String, val label: String, val rank: Int, val chipColor: Long, val apiValue: Int?) {
+  URGENT("urgent", "Urgent", 0, 0xFFF50000, 1),
+  HIGH("high", "High", 1, 0xFFFFCC00, 2),
+  NORMAL("normal", "Normal", 2, 0xFF6FDDFF, 3),
+  LOW("low", "Low", 3, 0xFFB5BCC9, 4),
+  NONE("none", "None", 4, 0xFF6B7280, null);
 
   /** Urgent/high tasks get the filled accent star in the list. */
   val starred: Boolean get() = this == URGENT || this == HIGH
@@ -55,6 +55,8 @@ data class TaskItem(
   val statusColorHex: String = "#888888",
   val statusType: String = "",
   val tags: List<String> = emptyList(),
+  /** Tag name → ClickUp tag background color (tag_bg, e.g. "#0f5096"); tags without a color are absent. */
+  val tagColors: Map<String, String> = emptyMap(),
   /** Web URL of the task (https://app.clickup.com/t/<id>). */
   val url: String? = null,
   val parentId: String? = null,
@@ -73,6 +75,28 @@ data class TaskDetail(
   val description: String,
   /** Direct children only, each with listId inherited from the parent when the API omits it. */
   val subtasks: List<TaskItem>,
+  /** Populated standard + custom fields, display-ready (read-only), in display order. */
+  val fields: List<TaskField> = emptyList(),
+)
+
+/** One populated task field for display, e.g. ("Requester", "Becky Puleo", "#800000"). */
+@Serializable
+data class TaskField(
+  val name: String,
+  val value: String,
+  /** Optional accent (drop-down option / label color). */
+  val colorHex: String? = null,
+)
+
+/** A task to create via POST /list/{listId}/task. */
+data class NewTask(
+  val listId: String,
+  val name: String,
+  val description: String = "",
+  val dueMs: Long? = null,
+  val priority: Priority = Priority.NONE,
+  /** Assign to the token's user (needed for the task to show up in My Tasks mode). */
+  val assignToMe: Boolean = true,
 )
 
 @Serializable

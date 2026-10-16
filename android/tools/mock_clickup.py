@@ -7,7 +7,9 @@
         'echo http://127.0.0.1:8765/api/v2 > files/api_base_override.txt'
 
 Then connect in the app with the token pk_test_token. Debug builds only (release ignores the override).
-Test controls: POST /__fail?mode=401|500|net|off  ·  GET /__state  ·  POST /__reset
+Test controls: POST /__fail?mode=401|500|net|off  ·  GET /__state  ·  POST /__reset  ·  POST /__bulk?n=150
+(adds n filler tasks so My Tasks spans several 100-task pages). CORS is open, so the iCUE widget can be
+pointed at it from a browser page served on localhost.
 """
 import json
 import sys
@@ -29,6 +31,10 @@ STATUSES = {
 }
 LISTS = {"L1": "Engineering", "L2": "Ops", "L3": "Inbox"}
 PRIO = {"urgent": "#f50000", "high": "#ffcc00", "normal": "#6fddff", "low": "#d8d8d8"}
+PRIO_BY_ID = {1: "urgent", 2: "high", 3: "normal", 4: "low"}
+TAG_COLORS = {"finance": "#0f5096", "bug": "#e50000", "planning": "#1b9e77", "security": "#7b2cbf", "meeting": "#0f5096"}
+REQUESTERS = [("Ariana Carlone", "#9b59b6"), ("Becky Puleo", "#800000"), ("Dana Reyes", "#1abc9c")]
+PAGE = 100
 DAY = 86_400_000
 
 state_lock = threading.Lock()
@@ -68,6 +74,15 @@ def seed():
             "priority": None if prio is None else {"id": "1", "priority": prio, "color": PRIO[prio]},
             "tags": [{"name": t} for t in tags], "parent": parent,
             "text_content": f"{name}. This is a mock task description used for testing the widget.\n\nSecond paragraph.",
+            "created": now - 7 * DAY,
+            "fields": {
+                "requester": {"t1": 1, "t2": 0, "t7": 2}.get(tid),
+                "incident": {"t2": "INC2383904", "t7": "INC2390117"}.get(tid),
+                "done_date": str(now + 5 * DAY) if tid in ("t1", "t5") else None,
+                "epicor": {"t1": "9", "t6": "42"}.get(tid),
+                "notes": "Customer reports the redirect loops after SSO.\nRepro on Android 14." if tid == "t2" else None,
+                "progress": 33 if tid == "t2" else 0,
+            },
         }
     return tasks
 
@@ -75,12 +90,33 @@ def seed():
 TASKS = seed()
 
 
+def custom_fields(t):
+    f = t.get("fields") or {}
+    return [
+        {"id": "cf-req", "name": "Requester", "type": "drop_down", "value": f.get("requester"),
+         "type_config": {"options": [{"id": f"opt{i}", "name": n, "color": c, "orderindex": i}
+                                     for i, (n, c) in enumerate(REQUESTERS)]}},
+        {"id": "cf-inc", "name": "Incident No.", "type": "short_text", "value": f.get("incident"), "type_config": {}},
+        {"id": "cf-done", "name": "Done Date", "type": "date", "value": f.get("done_date"), "type_config": {}},
+        {"id": "cf-epi", "name": "Epicor Task No", "type": "number", "value": f.get("epicor"),
+         "type_config": {"number_format": "en-US"}},
+        {"id": "cf-notes", "name": "Incident Description", "type": "text", "value": f.get("notes"), "type_config": {}},
+        {"id": "cf-prog", "name": "Progress", "type": "automatic_progress",
+         "value": {"percent_complete": f.get("progress", 0)}, "type_config": {"tracking": {"subtasks": True}}},
+    ]
+
+
 def task_json(t, list_null=False):
     return {
         "id": t["id"], "custom_id": None, "name": t["name"], "text_content": t["text_content"],
         "description": t["text_content"], "status": status_obj(t["list_id"], t["status"]),
         "orderindex": "1.0000", "date_created": "1700000000000", "due_date": t["due_date"],
-        "priority": t["priority"], "tags": t["tags"], "parent": t["parent"],
+        "priority": t["priority"], "parent": t["parent"],
+        "tags": [{"name": g["name"], "tag_fg": "#ffffff", "tag_bg": TAG_COLORS.get(g["name"], "#555555")}
+                 for g in t["tags"]],
+        "custom_fields": custom_fields(t), "team_id": TEAM["id"],
+        "date_created": str(t.get("created", 1700000000000)), "start_date": None, "time_estimate": None,
+        "points": None, "creator": {"id": USER["id"], "username": USER["username"]},
         "url": f"https://app.clickup.com/t/{t['id']}",
         "list": None if list_null else {"id": t["list_id"], "name": LISTS[t["list_id"]], "access": True},
         "assignees": [{"id": USER["id"], "username": USER["username"]}],
@@ -91,7 +127,24 @@ def is_open(t):
     return status_obj(t["list_id"], t["status"])["type"] not in ("closed", "done")
 
 
+def page_of(items, q):
+    page = int(q.get("page", ["0"])[0])
+    chunk = items[page * PAGE:(page + 1) * PAGE]
+    return {"tasks": chunk, "last_page": (page + 1) * PAGE >= len(items)}
+
+
 class Handler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin") or "*")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS")
+        super().end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def log_message(self, fmt, *args):
         sys.stdout.write("%s %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
         sys.stdout.flush()
@@ -128,6 +181,37 @@ class Handler(BaseHTTPRequestHandler):
             with state_lock:
                 TASKS = seed()
             return self.send(200, {"ok": True})
+        if u.path == "/__bulk":
+            n = int(q.get("n", ["150"])[0])
+            with state_lock:
+                base = seed()["t5"]
+                for i in range(n):
+                    tid = f"bulk{i}"
+                    TASKS[tid] = dict(base, id=tid, name=f"Filler task {i}", status="in progress" if i % 10 == 9 else "to do",
+                                      due_date=None, priority=None, tags=[], fields={})
+            return self.send(200, {"tasks": len(TASKS)})
+        if u.path.startswith("/api/v2/"):
+            if not self.authed():
+                return
+            parts = u.path[len("/api/v2/"):].strip("/").split("/")
+            length = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(length) or b"{}")
+            sys.stdout.write(f"   POST body: {body}\n")
+            if len(parts) == 3 and parts[0] == "list" and parts[2] == "task" and parts[1] in LISTS:
+                if not str(body.get("name", "")).strip():
+                    return self.send(400, {"err": "Task name invalid", "ECODE": "INPUT_005"})
+                with state_lock:
+                    tid = f"n{len(TASKS) + 1}"
+                    prio = PRIO_BY_ID.get(body.get("priority"))
+                    TASKS[tid] = {
+                        "id": tid, "name": body["name"], "list_id": parts[1], "status": STATUSES[parts[1]][0][0],
+                        "due_date": None if body.get("due_date") is None else str(body["due_date"]),
+                        "priority": None if prio is None else {"id": "1", "priority": prio, "color": PRIO[prio]},
+                        "tags": [], "parent": None, "text_content": body.get("description", ""),
+                        "created": int(time.time() * 1000), "fields": {},
+                        "assigned": USER["id"] in (body.get("assignees") or []),
+                    }
+                    return self.send(200, task_json(TASKS[tid]))
         self.send(404, {"err": "not found"})
 
     def do_GET(self):
@@ -160,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 3 and parts[0] == "list" and parts[2] == "task":
                 lid = parts[1]
                 ts = [task_json(t) for t in TASKS.values() if t["list_id"] == lid and t["parent"] is None and is_open(t)]
-                return self.send(200, {"tasks": ts, "last_page": True})
+                return self.send(200, page_of(ts, q))
             if len(parts) == 3 and parts[0] == "team" and parts[2] == "task":
                 parent = q.get("parent", [None])[0]
                 include_closed = q.get("include_closed", ["false"])[0] == "true"
@@ -173,8 +257,10 @@ class Handler(BaseHTTPRequestHandler):
                         continue
                     if not include_closed and not is_open(t):
                         continue
+                    if parent is None and not t.get("assigned", True):
+                        continue
                     ts.append(task_json(t))
-                return self.send(200, {"tasks": ts, "last_page": True})
+                return self.send(200, page_of(ts, q))
             if len(parts) == 2 and parts[0] == "task" and parts[1] in TASKS:
                 t = TASKS[parts[1]]
                 body = task_json(t)
@@ -194,6 +280,9 @@ class Handler(BaseHTTPRequestHandler):
         with state_lock:
             if len(parts) == 2 and parts[0] == "task" and parts[1] in TASKS:
                 t = TASKS[parts[1]]
+                if "priority" in body:
+                    prio = PRIO_BY_ID.get(body["priority"])
+                    t["priority"] = None if prio is None else {"id": str(body["priority"]), "priority": prio, "color": PRIO[prio]}
                 if "status" in body:
                     names = [s[0].lower() for s in STATUSES[t["list_id"]]]
                     if body["status"].lower() not in names:
