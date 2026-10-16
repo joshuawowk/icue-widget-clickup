@@ -26,6 +26,12 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
 - **Responsive**: all Xeneon Edge slot sizes — S/M/L/XL, horizontal (multi-column on L/XL) and vertical
 - **Personalization**: text/accent/background colors, background image with glass blur, transparency
 
+## Android version
+
+An Android home-screen widget with the same function and look — Material You or the ClickUp dark look,
+resizable, per-widget settings, quick-complete with Undo, filters and task details — lives in
+[`android/`](android/README.md).
+
 ## Installation
 
 ### With the iCUE Widget CLI

@@ -8,12 +8,23 @@ quick-complete with Undo, and a task detail view with subtasks and status change
 Built with Jetpack Glance (Compose for widgets), WorkManager and Material 3. Talks directly to the
 ClickUp API with your personal token — no companion service.
 
+![ClickUp dark theme](docs/widget-clickup-dark.png)
+
+**System (Material You)** — follows your wallpaper palette and light/dark mode live:
+
+![Material You: dark, light and another wallpaper palette](docs/widget-material-you.png)
+
+| Filter bar · quick-complete with Undo | Task details | Per-widget settings with live preview |
+|---|---|---|
+| ![](docs/filter-and-undo.png) | ![](docs/detail-sheet.png) | ![](docs/widget-settings.png) |
+
 ## Features
 
 - **Same function and form as the iCUE widget** — header with title, workspace and task count;
   due chips; priority stars; list names; "+N more"; offline fallback to the last good data
 - **Interactive**
-  - Tap the **header** → filter bar with **Status** and **Priority** multi-select chips (plus Refresh / Settings)
+  - Tap the **header** → Refresh / Settings / Open ClickUp, and **Status** + **Priority** multi-select chips
+    (same semantics as iCUE: all or none selected = show everything; an accent dot marks an active filter)
   - Tap a task's **circle** → quick-complete with an **Undo** bar before it's sent to ClickUp
   - Tap a **task** → details sheet: description, due date, priority, tags, **subtasks** (X of Y done,
     quick-complete with Undo) and **status pills** to change the task's status; Open in ClickUp
@@ -28,6 +39,10 @@ ClickUp API with your personal token — no companion service.
   - Background opacity, text size (80–140 %), row density, optional background image with blur,
     and toggles for subtitle, count, list names, due chips and stars
 - **Refresh** every 15 / 30 / 60 / 120 min (Android's background minimum is 15 min) and on demand
+- **States** like the iCUE widget: loading, setup (no token), all clear, filtered-to-zero, error
+  (a rejected token says so and opens the app), and `• offline` with the last good data on network errors
+- Works on any launcher — tested on **Microsoft Launcher** (pin from the app, resize handles, its own
+  widget *Settings* menu) — and on Pixel Launcher; Android 12+ launchers also offer *Widget settings*
 
 ## Install
 
@@ -47,8 +62,8 @@ Requires Android 8.0+ (API 26). Material You colors need Android 12+.
    **API Token**, starts with `pk_`) → **Connect**. Or flip on **sample tasks** to try it without an account.
 2. Add the widget: long-press an empty spot on your home screen → **Widgets** → **ClickUp Tasks**
    (or use **Add widget to home screen** in the app, where the launcher supports it).
-3. Pick what it shows and how it looks in the settings screen that opens. Re-open it any time from the
-   widget's filter bar (⚙), your launcher's widget settings, or the app.
+3. Pick what it shows and how it looks (live preview at the top). Re-open the settings any time:
+   tap the widget's title → **Settings**, use your launcher's widget settings, or open the app.
 
 ## Privacy
 
@@ -68,3 +83,6 @@ and excluded from backups. No analytics.
       'echo http://127.0.0.1:8765/api/v2 > files/api_base_override.txt'
   ```
 - Release signing reads `android/keystore.properties` (gitignored); without it the release build is debug-signed.
+- The release build is minified with R8 — test it on a device too (`proguard-rules.pro` keeps the Glance
+  `ActionCallback` constructors that Glance instantiates reflectively; without that rule every widget tap
+  silently does nothing in release only).
