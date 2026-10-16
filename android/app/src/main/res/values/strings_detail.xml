@@ -7,6 +7,7 @@
     <string name="detail_show_less">Show less</string>
     <string name="detail_subtasks">Subtasks</string>
     <string name="detail_subtasks_progress">%1$d of %2$d done</string>
+    <string name="detail_subtask_undo_cd">Undo completing \"%1$s\"</string>
     <string name="detail_subtask_complete_cd">Mark \"%1$s\" complete</string>
     <string name="detail_subtask_done_cd">Completed</string>
     <string name="detail_status_heading">Status</string>

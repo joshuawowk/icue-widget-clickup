@@ -2,13 +2,13 @@ package net.jwowk.clickupwidget.ui.detail
 
 import android.app.Application
 import android.appwidget.AppWidgetManager
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import net.jwowk.clickupwidget.Graph
 import net.jwowk.clickupwidget.R
 import net.jwowk.clickupwidget.data.TaskLogic
@@ -27,14 +26,20 @@ import net.jwowk.clickupwidget.widget.WidgetUpdater
 
 /**
  * A snackbar request. [undoId] non-null means it carries an Undo action for that pending completion.
- * State-driven (not an event) so it survives rotation.
+ * State-driven (not an event) so it survives rotation; [deadlineMs] is absolute ([SystemClock.elapsedRealtime])
+ * so a rotation shows only the time that is left.
  */
 internal data class SnackMessage(
   val key: Long,
   val text: String,
   val undoId: String? = null,
-  val durationMs: Long = 4000,
+  val deadlineMs: Long = 0,
 )
+
+/** Process-lifetime scope for requests that must finish (and refresh the widget) after the sheet is gone. */
+internal object DetailWork {
+  val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+}
 
 internal data class DetailUiState(
   val appWidgetId: Int,
@@ -58,14 +63,30 @@ internal data class DetailUiState(
   /** Subtasks confirmed completed but not yet reflected by a reload. */
   val doneIds: Set<String> = emptySet(),
   val snack: SnackMessage? = null,
+  /** Non-undo messages waiting behind an active undo snackbar. */
+  val snackQueue: List<SnackMessage> = emptyList(),
   /** The task was completed from the sheet: the activity should close. */
   val closeRequested: Boolean = false,
 ) {
   val statusBusy: Boolean get() = savingStatus != null
 
-  fun isSubtaskDone(sub: TaskItem): Boolean = sub.isDone || sub.id in doneIds || sub.id in pending
+  /** Done for display: committed or still in the undo window (struck through, circle checked). */
+  fun isSubtaskDone(sub: TaskItem): Boolean = isSubtaskCommittedDone(sub) || sub.id in pending
 
-  val subtasksDone: Int get() = subtasks.count(::isSubtaskDone)
+  /** Done for real (not merely pending). */
+  fun isSubtaskCommittedDone(sub: TaskItem): Boolean = sub.isDone || sub.id in doneIds
+
+  val subtasksDone: Int get() = subtasks.count(::isSubtaskCommittedDone)
+
+  /** Show [msg], or queue it when it would replace a still-active undo snackbar. */
+  fun withSnack(msg: SnackMessage): DetailUiState =
+    if (snack?.undoId != null && msg.undoId == null) copy(snackQueue = snackQueue + msg) else copy(snack = msg)
+
+  /** Drop the current snackbar and promote the next queued one. */
+  fun nextSnack(): DetailUiState = copy(snack = snackQueue.firstOrNull(), snackQueue = snackQueue.drop(1))
+
+  /** Drop the undo snackbar for [id] (its op left the pending set). */
+  fun clearUndoSnack(id: String): DetailUiState = if (snack?.undoId == id) nextSnack() else this
 }
 
 /**
@@ -85,7 +106,10 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
   private val ops = HashMap<String, PendingOp>()
 
   /** A change was made that the home-screen widget hasn't been refreshed for yet. */
-  private var dirty = false
+  @Volatile private var dirty = false
+
+  /** The ViewModel is gone: requests finishing now must refresh the widget themselves. */
+  @Volatile private var cleared = false
 
   private fun str(id: Int, vararg args: Any): String = getApplication<Application>().getString(id, *args)
 
@@ -164,9 +188,9 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
     val cur = _state.value ?: return
     if (cur.statusBusy || DetailFormat.isCurrentStatus(status.name, cur.task.status)) return
     update(s) { it.copy(savingStatus = status.name) }
-    viewModelScope.launch {
+    DetailWork.scope.launch {
       try {
-        withContext(NonCancellable) { Graph.repository().setStatus(cur.task.id, status.name) }
+        Graph.repository().setStatus(cur.task.id, status.name)
         update(s) {
           it.copy(
             task = it.task.copy(status = status.name, statusColorHex = status.colorHex, statusType = status.type),
@@ -174,12 +198,13 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
           )
         }
         snack(s, str(R.string.detail_status_changed, status.name.uppercase()), durationMs = 2200)
-        refreshWidget(cur.appWidgetId)
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
         update(s) { it.copy(savingStatus = null) }
         snack(s, str(R.string.detail_status_failed))
+      } finally {
+        refreshWidget(cur.appWidgetId)
       }
     }
   }
@@ -210,7 +235,7 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
     val job = viewModelScope.launch {
       delay(undoMs)
       ops.remove(id)
-      runComplete(s, cur.appWidgetId, id, listId, isParent)
+      DetailWork.scope.launch { runComplete(s, cur.appWidgetId, id, listId, isParent) }
     }
     ops[id] = PendingOp(id, listId, isParent, job)
   }
@@ -219,42 +244,51 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
   fun undo(id: String) {
     val op = ops.remove(id) ?: return
     op.job.cancel()
-    update(session) { it.copy(pending = it.pending - id) }
+    update(session) { it.copy(pending = it.pending - id).clearUndoSnack(id) }
   }
 
+  /** Runs in [DetailWork.scope]: must tolerate the ViewModel (and sheet) being gone. */
   private suspend fun runComplete(s: Int, appWidgetId: Int, id: String, listId: String, isParent: Boolean) {
     try {
-      withContext(NonCancellable) { Graph.repository().completeTask(id, listId) }
+      Graph.repository().completeTask(id, listId)
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
-      update(s) { it.copy(pending = it.pending - id) }
+      update(s) { it.copy(pending = it.pending - id).clearUndoSnack(id) }
       snack(
         s,
         str(if (isParent) R.string.detail_complete_failed else R.string.detail_subtask_complete_failed),
         durationMs = 4000,
       )
+      refreshAfterRequest(s, appWidgetId)
       return
     }
     if (isParent) {
       refreshWidget(appWidgetId)
-      update(s) { it.copy(pending = it.pending - id, closeRequested = true) }
+      update(s) { it.copy(pending = it.pending - id, closeRequested = true).clearUndoSnack(id) }
     } else {
-      dirty = true
-      update(s) { it.copy(pending = it.pending - id, doneIds = it.doneIds + id) }
-      loadDetail(s, delayMs = 450)
+      update(s) { it.copy(pending = it.pending - id, doneIds = it.doneIds + id).clearUndoSnack(id) }
+      refreshAfterRequest(s, appWidgetId)
+      if (!cleared) loadDetail(s, delayMs = 450)
     }
   }
 
+  /** A subtask request finished: refresh now if nobody is left to flush on close, else defer to the flush. */
+  private fun refreshAfterRequest(s: Int, appWidgetId: Int) {
+    if (cleared || s != session) refreshWidget(appWidgetId) else dirty = true
+  }
+
   fun snackConsumed(key: Long) {
-    _state.update { cur -> if (cur?.snack?.key == key) cur.copy(snack = null) else cur }
+    _state.update { cur -> if (cur?.snack?.key == key) cur.nextSnack() else cur }
   }
 
   private fun snack(s: Int, text: String, undoId: String? = null, durationMs: Long = 4000) {
-    update(s) { it.copy(snack = SnackMessage(++snackKey, text, undoId, durationMs)) }
+    val msg = SnackMessage(++snackKey, text, undoId, SystemClock.elapsedRealtime() + durationMs)
+    update(s) { it.withSnack(msg) }
   }
 
   private fun refreshWidget(appWidgetId: Int) {
+    // Safe from any thread and after clear(): only touches the application context.
     dirty = false
     WidgetUpdater.refreshNow(
       getApplication(),
@@ -277,14 +311,14 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
     if (!needRefresh) return
     val context = getApplication<Application>()
     val widgetId = cur.appWidgetId.takeIf { it != AppWidgetManager.INVALID_APPWIDGET_ID }
-    appScope.launch {
+    DetailWork.scope.launch {
       toSend.forEach { op -> op.listId?.let { runCatching { repo.completeTask(op.id, it) } } }
       WidgetUpdater.refreshNow(context, widgetId)
     }
   }
 
-  private companion object {
-    /** Outlives the ViewModel so a completion flushed on close still reaches ClickUp. */
-    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  override fun onCleared() {
+    cleared = true
+    flushAndRefresh()
   }
 }

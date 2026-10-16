@@ -55,11 +55,6 @@ class TaskDetailActivity : ComponentActivity() {
     if (!openFrom(intent, force = true)) finish()
   }
 
-  override fun onDestroy() {
-    if (isFinishing) viewModel.flushAndRefresh()
-    super.onDestroy()
-  }
-
   private fun openFrom(intent: Intent, force: Boolean): Boolean {
     val task = Nav.taskFromIntent(intent) ?: return false
     val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)

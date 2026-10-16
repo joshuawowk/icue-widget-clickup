@@ -1,5 +1,6 @@
 package net.jwowk.clickupwidget.ui.detail
 
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
@@ -94,7 +95,7 @@ internal fun TaskDetailScreen(
     if (snack == null) return@LaunchedEffect
     coroutineScope {
       val timer = launch {
-        delay(snack.durationMs)
+        delay((snack.deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0))
         snackHost.currentSnackbarData?.dismiss()
       }
       val result = snackHost.showSnackbar(
@@ -131,7 +132,7 @@ internal fun TaskDetailScreen(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
       ) {
-        SheetContent(state, onDismiss, onSetStatus, onCompleteSubtask, onCompleteTask, onOpenInClickUp)
+        SheetContent(state, onDismiss, onSetStatus, onCompleteSubtask, onCompleteTask, onUndo, onOpenInClickUp)
       }
     }
     SnackbarHost(
@@ -151,6 +152,7 @@ private fun SheetContent(
   onSetStatus: (TaskStatus) -> Unit,
   onCompleteSubtask: (TaskItem) -> Unit,
   onCompleteTask: () -> Unit,
+  onUndo: (String) -> Unit,
   onOpenInClickUp: () -> Unit,
 ) {
   val task = state.task
@@ -186,9 +188,9 @@ private fun SheetContent(
 
     MetaRow(state)
     Description(state)
-    if (state.subtasks.isNotEmpty()) SubtasksSection(state, onCompleteSubtask)
+    if (state.subtasks.isNotEmpty()) SubtasksSection(state, onCompleteSubtask, onUndo)
     StatusSection(state, onSetStatus)
-    Actions(state, onCompleteTask, onOpenInClickUp)
+    Actions(state, onCompleteTask, onUndo, onOpenInClickUp)
   }
 }
 
@@ -275,7 +277,7 @@ private fun Description(state: DetailUiState) {
 }
 
 @Composable
-private fun SubtasksSection(state: DetailUiState, onComplete: (TaskItem) -> Unit) {
+private fun SubtasksSection(state: DetailUiState, onComplete: (TaskItem) -> Unit, onUndo: (String) -> Unit) {
   Row(
     Modifier
       .fillMaxWidth()
@@ -290,8 +292,14 @@ private fun SubtasksSection(state: DetailUiState, onComplete: (TaskItem) -> Unit
     )
   }
   state.subtasks.forEach { sub ->
-    SubtaskRow(sub, done = state.isSubtaskDone(sub), nowMs = state.nowMs) {
-      onComplete(sub)
+    SubtaskRow(
+      sub,
+      done = state.isSubtaskDone(sub),
+      committed = state.isSubtaskCommittedDone(sub),
+      nowMs = state.nowMs,
+    ) {
+      // Tapping a still-pending (checked) circle undoes it.
+      if (sub.id in state.pending) onUndo(sub.id) else onComplete(sub)
     }
   }
 }
@@ -310,7 +318,7 @@ private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SubtaskRow(sub: TaskItem, done: Boolean, nowMs: Long, onComplete: () -> Unit) {
+private fun SubtaskRow(sub: TaskItem, done: Boolean, committed: Boolean, nowMs: Long, onClick: () -> Unit) {
   val statusColor = argb(sub.statusColorHex)
   val due = remember(sub.dueMs, nowMs) { TaskLogic.dueInfo(sub.dueMs, nowMs) }
   Row(
@@ -322,10 +330,11 @@ private fun SubtaskRow(sub: TaskItem, done: Boolean, nowMs: Long, onComplete: ()
     CheckCircle(
       color = statusColor,
       checked = done,
-      enabled = !done,
-      description = if (done) stringResource(R.string.detail_subtask_done_cd)
+      enabled = !committed,
+      description = if (committed) stringResource(R.string.detail_subtask_done_cd)
+      else if (done) stringResource(R.string.detail_subtask_undo_cd, sub.name)
       else stringResource(R.string.detail_subtask_complete_cd, sub.name),
-      onClick = onComplete,
+      onClick = onClick,
     )
     Column(Modifier.weight(1f).padding(top = 8.dp, bottom = 6.dp)) {
       Text(
@@ -455,7 +464,7 @@ private fun StatusPill(status: TaskStatus, current: Boolean, saving: Boolean, bu
 }
 
 @Composable
-private fun Actions(state: DetailUiState, onCompleteTask: () -> Unit, onOpenInClickUp: () -> Unit) {
+private fun Actions(state: DetailUiState, onCompleteTask: () -> Unit, onUndo: (String) -> Unit, onOpenInClickUp: () -> Unit) {
   val completing = state.task.id in state.pending
   Row(
     Modifier
@@ -473,7 +482,7 @@ private fun Actions(state: DetailUiState, onCompleteTask: () -> Unit, onOpenInCl
       Text(stringResource(R.string.detail_open_in_clickup), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     if (!state.task.isDone) {
-      Button(onClick = onCompleteTask, enabled = !completing, modifier = Modifier.weight(1f)) {
+      Button(onClick = { if (completing) onUndo(state.task.id) else onCompleteTask() }, modifier = Modifier.weight(1f)) {
         Icon(painterResource(R.drawable.ic_detail_task_alt), null, Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.detail_mark_complete), maxLines = 1, overflow = TextOverflow.Ellipsis)
