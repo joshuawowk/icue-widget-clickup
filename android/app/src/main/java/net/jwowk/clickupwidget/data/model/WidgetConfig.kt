@@ -110,6 +110,8 @@ data class AppSettings(
   /** List last used by "New task" in My Tasks mode (prefilled next time). */
   val lastNewTaskListId: String = "",
   val lastNewTaskListName: String = "",
+  /** Where [lastNewTaskListId] is valid: "demo", or the workspace id it belongs to. Ignored on mismatch. */
+  val lastNewTaskScope: String = "",
 ) {
   companion object {
     val REFRESH_CHOICES = listOf(15, 30, 60, 120)
