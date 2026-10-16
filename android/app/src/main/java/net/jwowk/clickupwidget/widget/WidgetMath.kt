@@ -33,6 +33,25 @@ internal object WidgetMath {
   /** Background opacity 0..100 rounded to the nearest 10 (matches the shipped `w_bg_NN` colors). */
   fun quantizeOpacity(opacity: Int): Int = (opacity.coerceIn(0, 100) + 5) / 10 * 10
 
+  /** Which header parts fit; the title (with chevron and filter dot) always keeps its room. */
+  data class HeaderLayout(val showTasksWord: Boolean, val showCount: Boolean, val showRefresh: Boolean, val buttonDp: Int)
+
+  /**
+   * Decides the header parts from [contentWidthDp] (thresholds grow with [textScale] above 1): the "tasks" word
+   * needs >= 290dp, the count number >= 200dp, the Refresh button >= 160dp; "+" is always kept.
+   * Buttons shrink to 28dp when [compact] (short or narrow).
+   */
+  fun headerLayout(contentWidthDp: Float, textScale: Float, showCount: Boolean, compact: Boolean = false): HeaderLayout {
+    val k = maxOf(1f, textScale)
+    val count = showCount && contentWidthDp >= 200f * k
+    return HeaderLayout(
+      showTasksWord = count && contentWidthDp >= 290f * k,
+      showCount = count,
+      showRefresh = contentWidthDp >= 160f * k,
+      buttonDp = if (compact) 28 else 32,
+    )
+  }
+
   /** Estimated rendered width of a filter chip in dp. */
   fun chipWidthDp(label: String, fontSp: Float): Float = label.length * fontSp * GLYPH_EM + CHIP_CHROME_DP
 

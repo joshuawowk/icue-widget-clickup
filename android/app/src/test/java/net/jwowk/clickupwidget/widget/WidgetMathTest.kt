@@ -17,6 +17,25 @@ class WidgetMathTest {
     assertEquals(0, WidgetMath.quantizeOpacity(-3))
   }
 
+  @Test fun headerLayoutDropsPartsAsWidthShrinks() {
+    val wide = WidgetMath.headerLayout(320f, 1f, showCount = true)
+    assertTrue(wide.showTasksWord && wide.showCount && wide.showRefresh)
+    assertEquals(32, wide.buttonDp)
+    val mid = WidgetMath.headerLayout(250f, 1f, showCount = true)
+    assertTrue(!mid.showTasksWord && mid.showCount && mid.showRefresh)
+    val small = WidgetMath.headerLayout(170f, 1f, showCount = true, compact = true)
+    assertTrue(!small.showCount && small.showRefresh)
+    assertEquals(28, small.buttonDp)
+    val tiny = WidgetMath.headerLayout(120f, 1f, showCount = true)
+    assertTrue(!tiny.showCount && !tiny.showRefresh)
+  }
+
+  @Test fun headerLayoutHonoursShowCountOffAndScale() {
+    val off = WidgetMath.headerLayout(400f, 1f, showCount = false)
+    assertTrue(!off.showCount && !off.showTasksWord && off.showRefresh)
+    assertTrue(!WidgetMath.headerLayout(290f, 1.4f, showCount = true).showTasksWord)
+  }
+
   @Test fun wrapRowsFillsGreedily() {
     val rows = WidgetMath.wrapRows(listOf(50f, 50f, 50f, 120f, 10f), availableDp = 120f)
     assertEquals(listOf(listOf(0, 1), listOf(2), listOf(3), listOf(4)), rows)

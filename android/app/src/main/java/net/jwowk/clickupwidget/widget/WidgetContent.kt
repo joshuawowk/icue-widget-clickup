@@ -220,7 +220,7 @@ private fun ColumnScope.Ready(state: WidgetState, config: WidgetConfig, colors: 
   val inFlight = state.ui.pendingCompletions + state.committing
   val toastShowing = toastText(state, now, context) != null
   LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-    if (barOpen) filterBar(view, colors, dims, env, context)
+    if (barOpen) filterBar(view, state.ui.refreshing, !headerLayout(config, dims).showRefresh, colors, dims, env, context)
     when {
       view.scopedTotal == 0 -> item(WidgetMath.stableId("__allclear")) { AllClear(colors, dims) }
       filterEmpty -> item(WidgetMath.stableId("__filterempty")) {
@@ -263,6 +263,7 @@ private fun Header(
   env: WidgetEnv,
 ) {
   val context = LocalContext.current
+  val hl = headerLayout(config, dims)
   Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     // The title area toggles the filter bar; the right-hand controls have their own taps.
     Column(modifier = GlanceModifier.defaultWeight().clickIf(env) { actionRunCallback<ToggleFilterBarAction>() }) {
@@ -288,41 +289,50 @@ private fun Header(
         if (sub.isNotEmpty()) Text(sub, style = style(colors.muted, dims.meta), maxLines = 1)
       }
     }
-    // Narrow widgets drop the count entirely so the title keeps its room.
-    if (config.showCount && !dims.bp.narrow) {
+    // Narrow widgets drop the count / "tasks" word / Refresh so the title keeps its room.
+    if (hl.showCount) {
       Spacer(GlanceModifier.width(8.dp))
       Row(verticalAlignment = Alignment.Bottom) {
         Text(view.total.toString(), style = style(colors.accent, dims.count, bold = true), maxLines = 1)
-        Spacer(GlanceModifier.width(4.dp))
-        Text(
-          context.getString(if (view.total == 1) R.string.w_task_one else R.string.w_task_many),
-          modifier = GlanceModifier.padding(bottom = (4f * dims.scale).dp),
-          style = style(colors.muted, dims.meta),
-        )
+        if (hl.showTasksWord) {
+          Spacer(GlanceModifier.width(4.dp))
+          Text(
+            context.getString(if (view.total == 1) R.string.w_task_one else R.string.w_task_many),
+            modifier = GlanceModifier.padding(bottom = (4f * dims.scale).dp),
+            style = style(colors.muted, dims.meta),
+          )
+        }
       }
     }
     Spacer(GlanceModifier.width(4.dp))
-    HeaderButton(
-      R.drawable.ic_w_refresh, context.getString(R.string.w_cd_refresh),
-      if (state.ui.refreshing) colors.muted else colors.accent, dims, env,
-    ) { actionRunCallback<RefreshAction>() }
-    HeaderButton(R.drawable.ic_w_add, context.getString(R.string.w_cd_new_task), colors.accent, dims, env) {
+    if (hl.showRefresh) {
+      HeaderButton(
+        R.drawable.ic_w_refresh, context.getString(R.string.w_cd_refresh),
+        if (state.ui.refreshing) colors.muted else colors.accent, hl.buttonDp, dims, env,
+        if (state.ui.refreshing) null else ({ actionRunCallback<RefreshAction>() }),
+      )
+    }
+    HeaderButton(R.drawable.ic_w_add, context.getString(R.string.w_cd_new_task), colors.accent, hl.buttonDp, dims, env) {
       actionStartActivity(Nav.newTaskIntent(context, env.appWidgetId))
     }
   }
 }
 
-/** A 32dp tap target with a centered icon, for the header's Refresh and New-task buttons. */
+private fun headerLayout(config: WidgetConfig, dims: Dims) =
+  WidgetMath.headerLayout(dims.contentWidth, dims.scale, config.showCount, dims.bp.short || dims.bp.narrow)
+
+/** A square tap target ([sizeDp], 32 or 28) with a centered icon, for the header's Refresh and New-task buttons. */
 @Composable
 private fun HeaderButton(
   @DrawableRes icon: Int,
   description: String,
   tint: ColorProvider,
+  sizeDp: Int,
   dims: Dims,
   env: WidgetEnv,
-  action: () -> Action,
+  action: (() -> Action)?,
 ) {
-  Box(modifier = GlanceModifier.size(32.dp).clickIf(env, action), contentAlignment = Alignment.Center) {
+  Box(modifier = GlanceModifier.size(sizeDp.dp).let { if (action != null) it.clickIf(env, action) else it }, contentAlignment = Alignment.Center) {
     Image(
       provider = ImageProvider(icon),
       contentDescription = description,
@@ -351,7 +361,15 @@ private class ChipSpec(val label: String, val argb: Long, val on: Boolean, val a
   val fadedColor: ColorProvider get() = ColorProvider(Color(argb).copy(alpha = 0.45f))
 }
 
-private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, dims: Dims, env: WidgetEnv, context: Context) {
+private fun LazyListScope.filterBar(
+  view: TaskListView,
+  refreshing: Boolean,
+  showRefreshPill: Boolean,
+  colors: WidgetColors,
+  dims: Dims,
+  env: WidgetEnv,
+  context: Context,
+) {
   fun section(key: String, label: String, chips: List<ChipSpec>) {
     if (chips.isEmpty()) return
     item(WidgetMath.stableId("__label_$key")) {
@@ -373,6 +391,14 @@ private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, di
   // Actions first: on small widgets the chip rows push anything below them out of view.
   item(WidgetMath.stableId("__actions")) {
     Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
+      // The header drops its Refresh button when narrow; keep it reachable here.
+      if (showRefreshPill) {
+        ActionPill(
+          R.drawable.ic_w_refresh, context.getString(R.string.w_refresh),
+          colors, dims, env,
+          if (refreshing) null else ({ actionRunCallback<RefreshAction>() }),
+        )
+      }
       ActionPill(R.drawable.ic_w_settings, context.getString(R.string.w_settings), colors, dims, env) {
         actionStartActivity(Nav.configIntent(context, env.appWidgetId))
       }
@@ -438,14 +464,14 @@ private fun ActionPill(
   colors: WidgetColors,
   dims: Dims,
   env: WidgetEnv,
-  action: () -> Action,
+  action: (() -> Action)?,
 ) {
   Box(GlanceModifier.padding(end = 6.dp)) {
     Row(
       modifier = GlanceModifier
         .background(ImageProvider(R.drawable.widget_chip_off), colorFilter = ColorFilter.tint(colors.accent))
         .padding(horizontal = 8.dp, vertical = 4.dp)
-        .clickIf(env, action),
+        .let { if (action != null) it.clickIf(env, action) else it },
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Icon(icon, colors.accent, (13f * dims.scale).dp)
