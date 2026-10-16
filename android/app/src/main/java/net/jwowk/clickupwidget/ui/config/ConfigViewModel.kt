@@ -23,9 +23,6 @@ class ConfigViewModel(app: Application, val appWidgetId: Int) : AndroidViewModel
   private val store = Graph.configStore
   private val saved: WidgetConfig = store.widgetConfig(appWidgetId)
 
-  /** True when this widget has never been saved (launcher removes it if the user backs out). */
-  val isNew: Boolean = !store.hasWidgetConfig(appWidgetId)
-
   /** The edited config. In single-list mode [WidgetConfig.listId] holds the chosen list; see [listMode]. */
   var config by mutableStateOf(saved)
     private set
@@ -81,7 +78,7 @@ class ConfigViewModel(app: Application, val appWidgetId: Int) : AndroidViewModel
 
   fun setList(id: String, name: String) {
     listError = false
-    update { it.copy(listId = id.trim(), listName = name) }
+    update { it.copy(listId = id.trim(), listName = name, title = titleForList(it.title, it.listName, name)) }
   }
 
   fun setWorkspace(id: String?) {
@@ -220,17 +217,24 @@ class ConfigViewModel(app: Application, val appWidgetId: Int) : AndroidViewModel
           result
         }
         path != finalFile.absolutePath -> {
+          val source = File(path)
           finalFile.delete()
-          if (File(path).renameTo(finalFile)) {
+          // Rename, else copy; on total failure keep pointing at the (existing) scratch file.
+          val promoted = source.renameTo(finalFile) ||
+            runCatching { source.copyTo(finalFile, overwrite = true) }.isSuccess && finalFile.exists()
+          if (promoted) {
             BackgroundImages.deleteEditFiles(context, appWidgetId)
             result.copy(backgroundImagePath = finalFile.absolutePath)
           } else {
+            finalFile.delete()
             result
           }
         }
         else -> result
       }
     }
+    // Keep the edited config in step so a retried commit sees the promoted file, not the deleted scratch one.
+    config = config.copy(backgroundImagePath = result.backgroundImagePath)
     committed = true
     return result
   }
@@ -238,4 +242,12 @@ class ConfigViewModel(app: Application, val appWidgetId: Int) : AndroidViewModel
   override fun onCleared() {
     if (!committed) BackgroundImages.deleteEditFiles(getApplication(), appWidgetId)
   }
+}
+
+/** New title after picking a list: the list's name if the title is blank/default/the previous list's name, else unchanged. */
+internal fun titleForList(title: String, previousListName: String, newListName: String): String {
+  val name = newListName.trim()
+  if (name.isEmpty()) return title
+  val t = title.trim()
+  return if (t.isEmpty() || t == "My Tasks" || (previousListName.isNotBlank() && t == previousListName.trim())) name else title
 }

@@ -2,7 +2,6 @@
 
 package net.jwowk.clickupwidget.ui.config
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -49,22 +47,16 @@ import net.jwowk.clickupwidget.ui.common.TokenEntryCard
 /** Per-widget settings: sticky live preview on top, Source and Style forms below, Save in the top and bottom bars. */
 @Composable
 internal fun ConfigScreen(vm: ConfigViewModel, saving: Boolean, onSave: () -> Unit, onCancel: () -> Unit) {
-  var showDiscard by rememberSaveable { mutableStateOf(false) }
   var previewVisible by rememberSaveable { mutableStateOf(true) }
   var previewSize by rememberSaveable { mutableStateOf(PreviewSize.LARGE) }
   val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-
-  fun requestClose() {
-    if (vm.isNew) showDiscard = true else onCancel()
-  }
-  BackHandler(enabled = vm.isNew && !saving) { showDiscard = true }
 
   Scaffold(
     topBar = {
       TopAppBar(
         title = { Text(stringResource(R.string.ui_config_title)) },
         navigationIcon = {
-          IconButton(onClick = ::requestClose, enabled = !saving) {
+          IconButton(onClick = onCancel, enabled = !saving) {
             Icon(painterResource(R.drawable.ic_ui_close), contentDescription = stringResource(R.string.ui_cancel))
           }
         },
@@ -128,15 +120,5 @@ internal fun ConfigScreen(vm: ConfigViewModel, saving: Boolean, onSave: () -> Un
         Spacer(Modifier.size(8.dp))
       }
     }
-  }
-
-  if (showDiscard) {
-    AlertDialog(
-      onDismissRequest = { showDiscard = false },
-      title = { Text(stringResource(R.string.ui_discard_title)) },
-      text = { Text(stringResource(R.string.ui_discard_message)) },
-      confirmButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.ui_discard)) } },
-      dismissButton = { TextButton(onClick = { showDiscard = false }) { Text(stringResource(R.string.ui_keep_editing)) } },
-    )
   }
 }

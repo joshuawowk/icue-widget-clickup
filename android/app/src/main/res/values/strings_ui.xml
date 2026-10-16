@@ -55,10 +55,6 @@
     <string name="ui_preview_workspace">Preview</string>
     <string name="ui_use_sample_tasks">Or use sample tasks</string>
     <string name="ui_config_launcher_note">On launchers without a widget settings option, this screen is also reachable from the widget: tap its title, then Settings.</string>
-    <string name="ui_discard_title">Discard widget?</string>
-    <string name="ui_discard_message">This widget has not been set up yet. If you leave now it will be removed from your home screen.</string>
-    <string name="ui_discard">Discard</string>
-    <string name="ui_keep_editing">Keep editing</string>
 
     <!-- Source section -->
     <string name="ui_section_source">Source</string>
