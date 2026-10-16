@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">ClickUp Tasks</string>
+    <string name="widget_name">ClickUp Tasks</string>
+    <string name="widget_description">Your open ClickUp tasks with due dates, priorities and quick-complete</string>
+</resources>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common -->
+    <string name="ui_cancel">Cancel</string>
+    <string name="ui_save">Save</string>
+    <string name="ui_retry">Retry</string>
+    <string name="ui_search">Search</string>
+    <string name="ui_percent">%1$d%%</string>
+    <string name="ui_seconds">%1$d s</string>
+
+    <!-- Token entry -->
+    <string name="ui_connect_title">Connect to ClickUp</string>
+    <string name="ui_connect_help">Paste your personal API token. In ClickUp: click your avatar, then Settings, Apps, API Token. It starts with pk_.</string>
+    <string name="ui_token_label">API token</string>
+    <string name="ui_connect">Connect</string>
+    <string name="ui_show_token">Show token</string>
+    <string name="ui_hide_token">Hide token</string>
+    <string name="ui_error_invalid_token">Invalid token</string>
+    <string name="ui_error_network">Network error. Check your connection and try again.</string>
+    <string name="ui_error_server">ClickUp returned an error. Try again later.</string>
+    <string name="ui_error_unknown">Something went wrong</string>
+
+    <!-- Main screen -->
+    <string name="ui_account_title">ClickUp account</string>
+    <string name="ui_account_connected">Connected</string>
+    <string name="ui_account_workspaces">Workspaces: %1$s</string>
+    <string name="ui_account_demo_note">Demo mode is on, so widgets show sample tasks. Turn it off below to connect your ClickUp account.</string>
+    <string name="ui_disconnect">Disconnect</string>
+    <string name="ui_demo_label">Use sample tasks — no account needed</string>
+    <string name="ui_widgets_title">Widgets</string>
+    <string name="ui_widgets_empty">No ClickUp Tasks widgets on your home screen yet.</string>
+    <string name="ui_widget_untitled">Untitled widget</string>
+    <string name="ui_source_my_tasks">My tasks</string>
+    <string name="ui_source_single_list">A single list</string>
+    <string name="ui_source_list">List: %1$s</string>
+    <string name="ui_add_widget">Add widget to home screen</string>
+    <string name="ui_add_widget_help">Long-press an empty spot on your home screen, tap Widgets, then pick ClickUp Tasks.</string>
+    <string name="ui_widget_settings_hint">Tap a widget above to change its settings. If your launcher has no widget settings option, tap the widget\'s title, then Settings.</string>
+    <string name="ui_settings_title">Settings</string>
+    <string name="ui_refresh_interval">Refresh interval</string>
+    <string name="ui_undo_delay">Undo delay for quick-complete</string>
+    <string name="ui_refresh_all">Refresh all widgets now</string>
+    <string name="ui_about_title">About and privacy</string>
+    <string name="ui_about_privacy">This app talks only to api.clickup.com, using your token. The token is encrypted on this device and is never backed up or sent anywhere else.</string>
+
+    <!-- Config screen -->
+    <string name="ui_config_title">Widget settings</string>
+    <string name="ui_preview">Preview</string>
+    <string name="ui_show_preview">Show preview</string>
+    <string name="ui_hide_preview">Hide preview</string>
+    <string name="ui_preview_small">Small 2×2</string>
+    <string name="ui_preview_medium">Medium 4×2</string>
+    <string name="ui_preview_large">Large 4×3</string>
+    <string name="ui_preview_unavailable">Preview unavailable</string>
+    <string name="ui_preview_workspace">Preview</string>
+    <string name="ui_use_sample_tasks">Or use sample tasks</string>
+    <string name="ui_config_launcher_note">On launchers without a widget settings option, this screen is also reachable from the widget: tap its title, then Settings.</string>
+
+    <!-- Source section -->
+    <string name="ui_section_source">Source</string>
+    <string name="ui_workspace">Workspace</string>
+    <string name="ui_show_tasks">Show tasks from</string>
+    <string name="ui_no_list_selected">No list selected</string>
+    <string name="ui_list_id_value">List ID: %1$s</string>
+    <string name="ui_list_required">Choose a list, or switch to My tasks.</string>
+    <string name="ui_choose_list">Choose list…</string>
+    <string name="ui_enter_list_id">Enter list ID manually</string>
+    <string name="ui_list_id">List ID</string>
+    <string name="ui_pick_list_title">Choose a list</string>
+    <string name="ui_no_lists">No matching lists</string>
+    <string name="ui_title">Title</string>
+    <string name="ui_show">Show</string>
+    <string name="ui_priority_default">Priority (default)</string>
+    <string name="ui_default_statuses">Default statuses</string>
+    <string name="ui_default_statuses_hint">e.g. In-Progress, Review — blank = all</string>
+    <string name="ui_max_tasks">Max tasks</string>
+
+    <!-- Style section -->
+    <string name="ui_section_style">Style</string>
+    <string name="ui_theme">Theme</string>
+    <string name="ui_theme_system_note">Uses your wallpaper colors (Android 12+)</string>
+    <string name="ui_theme_system_legacy">Your Android version uses the default Material palette</string>
+    <string name="ui_color_text">Text color</string>
+    <string name="ui_color_accent">Accent color</string>
+    <string name="ui_color_background">Background color</string>
+    <string name="ui_hex_color">Hex color</string>
+    <string name="ui_hex_color_invalid">Use the form #RRGGBB</string>
+    <string name="ui_bg_opacity">Background opacity</string>
+    <string name="ui_text_size">Text size</string>
+    <string name="ui_density">Density</string>
+    <string name="ui_show_subtitle">Show subtitle</string>
+    <string name="ui_show_count">Show task count</string>
+    <string name="ui_show_list_name">Show list name</string>
+    <string name="ui_show_due_chip">Show due date chip</string>
+    <string name="ui_show_priority_star">Show priority star</string>
+    <string name="ui_bg_image">Background image</string>
+    <string name="ui_pick_image">Choose image</string>
+    <string name="ui_replace_image">Replace image</string>
+    <string name="ui_remove_image">Remove</string>
+    <string name="ui_image_failed">Could not load that image</string>
+    <string name="ui_bg_blur">Blur</string>
+    <string name="ui_bg_blur_repick">Choose the image again to change its blur.</string>
+    <string name="ui_reset_style">Reset style to defaults</string>
+</resources>

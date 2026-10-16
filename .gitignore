@@ -1,3 +1,4 @@
-data/
+/data/
 *.icuewidget
 .DS_Store
+.claude/worktrees/
