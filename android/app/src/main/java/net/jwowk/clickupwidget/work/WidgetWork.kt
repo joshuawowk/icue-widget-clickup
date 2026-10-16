@@ -17,6 +17,8 @@ object WidgetWork {
   const val KEY_TASK_ID = "taskId"
   const val KEY_LIST_ID = "listId"
   const val KEY_MANUAL = "manual"
+  /** Skip the fetch when this widget was fetched moments ago (placement bursts, periodic right after onUpdate). */
+  const val KEY_DEDUPE = "dedupe"
   const val PERIODIC = "refresh-all"
   private const val NO_WIDGET = -1
 
@@ -30,9 +32,11 @@ object WidgetWork {
    * One-time refresh of one widget (or all when null). Manual refreshes replace an in-flight one and
    * flag "Refreshing…"; automatic ones keep an existing request. No network constraint, so it never hangs.
    */
-  fun refresh(context: Context, appWidgetId: Int?, manual: Boolean, delayMs: Long = 0) {
+  fun refresh(context: Context, appWidgetId: Int?, manual: Boolean, delayMs: Long = 0, dedupe: Boolean = false) {
     val req = OneTimeWorkRequestBuilder<RefreshWorker>()
-      .setInputData(workDataOf(KEY_APP_WIDGET_ID to (appWidgetId ?: NO_WIDGET), KEY_MANUAL to manual))
+      .setInputData(
+        workDataOf(KEY_APP_WIDGET_ID to (appWidgetId ?: NO_WIDGET), KEY_MANUAL to manual, KEY_DEDUPE to dedupe),
+      )
       .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
       .apply { if (appWidgetId != null) addTag(widgetTag(appWidgetId)) }
       .build()
@@ -69,9 +73,12 @@ object WidgetWork {
   }
 
   fun schedulePeriodic(context: Context, refreshMinutes: Int) {
-    val req = PeriodicWorkRequestBuilder<RefreshWorker>(refreshMinutes.coerceAtLeast(15).toLong(), TimeUnit.MINUTES)
+    val minutes = refreshMinutes.coerceAtLeast(15).toLong()
+    // Initial delay: placing a widget already fetches via onUpdate, so the first period need not run at once.
+    val req = PeriodicWorkRequestBuilder<RefreshWorker>(minutes, TimeUnit.MINUTES)
+      .setInitialDelay(minutes, TimeUnit.MINUTES)
       .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-      .setInputData(workDataOf(KEY_APP_WIDGET_ID to NO_WIDGET, KEY_MANUAL to false))
+      .setInputData(workDataOf(KEY_APP_WIDGET_ID to NO_WIDGET, KEY_MANUAL to false, KEY_DEDUPE to true))
       .build()
     WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, req)
   }

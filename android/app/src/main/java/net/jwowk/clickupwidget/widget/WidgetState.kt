@@ -14,6 +14,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.TaskListView
+import net.jwowk.clickupwidget.data.model.LoadState
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.data.model.WidgetSnapshot
 import net.jwowk.clickupwidget.data.model.WidgetStateKeys
@@ -47,6 +48,13 @@ internal data class WidgetState(
   fun view(nowMs: Long): TaskListView = TaskLogic.buildView(
     snapshot.tasks, configOrDefault, ui.selectedStatuses, ui.selectedPriorities, snapshot.listStatuses, nowMs,
   )
+
+  /** iCUE renderTasks: when tasks exist but the filters hide them all, open the filter bar (and keep it open). */
+  fun openBarIfFilteredEmpty(nowMs: Long): WidgetState {
+    if (ui.filterBarOpen || snapshot.loadState != LoadState.READY) return this
+    val v = view(nowMs)
+    return if (v.total == 0 && v.scopedTotal > 0) copy(ui = ui.copy(filterBarOpen = true)) else this
+  }
 
   fun withToast(message: String, nowMs: Long, durationMs: Long = TOAST_MS): WidgetState =
     copy(ui = ui.copy(toast = message, toastUntilMs = nowMs + durationMs))

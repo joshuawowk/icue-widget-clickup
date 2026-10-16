@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -22,13 +23,19 @@ import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.data.model.Workspace
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * ClickUp API v2 client. Android-free so it can be unit-tested against MockWebServer.
@@ -255,11 +262,22 @@ class ClickUpApi(
     return execute(authed(url, t).get().build()) { body -> JSON.parseToJsonElement(body) }
   }
 
-  private suspend fun <T> execute(request: Request, parse: (String) -> T): T = withContext(Dispatchers.IO) {
-    client.newCall(request).execute().use { response ->
-      if (response.code == 401) throw ClickUpApiException(401, "Invalid API token")
-      if (!response.isSuccessful) throw ClickUpApiException(response.code)
-      parse(response.body?.string().orEmpty())
+  /** Runs [request] asynchronously so coroutine cancellation (e.g. a replaced worker) cancels the HTTP call. */
+  private suspend fun <T> execute(request: Request, parse: (String) -> T): T {
+    val call = client.newCall(request)
+    val response = suspendCancellableCoroutine { cont ->
+      cont.invokeOnCancellation { call.cancel() }
+      call.enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) = cont.resumeWithException(e)
+        override fun onResponse(call: Call, response: Response) = cont.resume(response) { _, r, _ -> r.close() }
+      })
+    }
+    return withContext(Dispatchers.IO) {
+      response.use {
+        if (it.code == 401) throw ClickUpApiException(401, "Invalid API token")
+        if (!it.isSuccessful) throw ClickUpApiException(it.code)
+        parse(it.body?.string().orEmpty())
+      }
     }
   }
 

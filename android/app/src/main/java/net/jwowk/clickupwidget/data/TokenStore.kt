@@ -39,6 +39,12 @@ class TokenStore(context: Context) {
 
   fun hasToken(): Boolean = token() != null
 
+  /**
+   * True when a token is stored but the last read hit a transient Keystore error (it was kept, and the next
+   * call retries). Callers should treat this like a network error, not as "signed out".
+   */
+  val temporarilyUnavailable: Boolean get() = synchronized(lock) { !cacheLoaded && transientFailure }
+
   fun save(token: String): Unit = synchronized(lock) {
     val blob = try {
       encrypt(token)

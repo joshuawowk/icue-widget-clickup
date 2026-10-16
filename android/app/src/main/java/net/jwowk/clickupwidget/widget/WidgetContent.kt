@@ -170,7 +170,10 @@ private fun Setup(colors: WidgetColors, dims: Dims, env: WidgetEnv) {
 @Composable
 private fun ErrorState(state: WidgetState, colors: WidgetColors, dims: Dims, env: WidgetEnv) {
   val context = LocalContext.current
-  CenterMessage(GlanceModifier.clickIf(env) { actionRunCallback<RefreshAction>() }) {
+  val auth = state.snapshot.authError
+  CenterMessage(
+    GlanceModifier.clickIf(env) { if (auth) actionStartActivity(Nav.mainIntent(context)) else actionRunCallback<RefreshAction>() },
+  ) {
     Icon(R.drawable.ic_w_warning, colors.error, (24f * dims.scale).dp)
     Spacer(GlanceModifier.height(6.dp))
     Text(context.getString(R.string.w_error_title), style = style(colors.text, dims.task, bold = true))
@@ -180,7 +183,11 @@ private fun ErrorState(state: WidgetState, colors: WidgetColors, dims: Dims, env
     }
     Spacer(GlanceModifier.height(4.dp))
     Text(
-      if (state.ui.refreshing) context.getString(R.string.w_refreshing) else context.getString(R.string.w_error_retry),
+      when {
+        state.ui.refreshing -> context.getString(R.string.w_refreshing)
+        auth -> context.getString(R.string.w_error_fix_token)
+        else -> context.getString(R.string.w_error_retry)
+      },
       style = style(colors.accent, dims.meta, bold = true),
     )
   }
@@ -191,7 +198,7 @@ private fun ColumnScope.Ready(state: WidgetState, config: WidgetConfig, colors: 
   val now = System.currentTimeMillis()
   val view = state.view(now)
   val filterEmpty = view.total == 0 && view.scopedTotal > 0
-  val barOpen = state.ui.filterBarOpen || filterEmpty
+  val barOpen = state.ui.filterBarOpen
   Header(state, config, view, barOpen, colors, dims, env)
   Spacer(GlanceModifier.height(8.dp))
   Box(GlanceModifier.fillMaxWidth().height(1.dp).background(colors.divider)) {}
@@ -267,11 +274,7 @@ private fun Header(
           listOfNotNull(
             state.snapshot.workspaceName.takeIf { it.isNotBlank() },
             context.getString(R.string.w_filtered).takeIf { view.anyConstrained },
-            when {
-              !state.snapshot.offline -> null
-              state.snapshot.authError -> context.getString(R.string.w_token_invalid)
-              else -> context.getString(R.string.w_offline)
-            },
+            context.getString(R.string.w_offline).takeIf { state.snapshot.offline },
           ).joinToString(" • ")
         }
         if (sub.isNotEmpty()) Text(sub, style = style(colors.muted, dims.meta), maxLines = 1)
@@ -333,6 +336,25 @@ private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, di
       }
     }
   }
+  // Actions first: on small widgets the chip rows push anything below them out of view.
+  item(WidgetMath.stableId("__actions")) {
+    Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
+      ActionPill(R.drawable.ic_w_refresh, context.getString(R.string.w_refresh), colors, dims, env) {
+        actionRunCallback<RefreshAction>()
+      }
+      ActionPill(R.drawable.ic_w_settings, context.getString(R.string.w_settings), colors, dims, env) {
+        actionStartActivity(Nav.configIntent(context, env.appWidgetId))
+      }
+      // Three pills need ~280dp; below that "Open ClickUp" would only show truncated.
+      if (dims.contentWidth >= 280f) {
+        ActionPill(R.drawable.ic_w_open, context.getString(R.string.w_open_clickup), colors, dims, env) {
+          actionStartActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://app.clickup.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+          )
+        }
+      }
+    }
+  }
   section(
     "status", context.getString(R.string.w_status),
     view.presentStatuses.map { s ->
@@ -351,23 +373,8 @@ private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, di
       )
     },
   )
-  item(WidgetMath.stableId("__actions")) {
-    Column(modifier = GlanceModifier.fillMaxWidth()) {
-      Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp)) {
-        ActionPill(R.drawable.ic_w_refresh, context.getString(R.string.w_refresh), colors, dims, env) {
-          actionRunCallback<RefreshAction>()
-        }
-        ActionPill(R.drawable.ic_w_settings, context.getString(R.string.w_settings), colors, dims, env) {
-          actionStartActivity(Nav.configIntent(context, env.appWidgetId))
-        }
-        if (!dims.bp.narrow) {
-          ActionPill(R.drawable.ic_w_open, context.getString(R.string.w_open_clickup), colors, dims, env) {
-            actionStartActivity(
-              Intent(Intent.ACTION_VIEW, Uri.parse("https://app.clickup.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-          }
-        }
-      }
+  item(WidgetMath.stableId("__filterbar_end")) {
+    Box(GlanceModifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
       Box(GlanceModifier.fillMaxWidth().height(1.dp).background(colors.rowDivider)) {}
     }
   }

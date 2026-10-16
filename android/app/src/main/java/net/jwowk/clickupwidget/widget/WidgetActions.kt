@@ -31,7 +31,7 @@ class ToggleStatusAction : ActionCallback {
     val now = System.currentTimeMillis()
     WidgetStore.updateAndRender(context, glanceId) { s ->
       val current = s.ui.selectedStatuses ?: s.view(now).selectedStatuses
-      s.copy(ui = s.ui.copy(selectedStatuses = TaskLogic.toggle(current, name)))
+      s.copy(ui = s.ui.copy(selectedStatuses = TaskLogic.toggle(current, name))).openBarIfFilteredEmpty(now)
     }
   }
 }
@@ -43,7 +43,7 @@ class TogglePriorityAction : ActionCallback {
     val now = System.currentTimeMillis()
     WidgetStore.updateAndRender(context, glanceId) { s ->
       val current = s.ui.selectedPriorities ?: s.view(now).selectedPriorities
-      s.copy(ui = s.ui.copy(selectedPriorities = TaskLogic.toggle(current, key)))
+      s.copy(ui = s.ui.copy(selectedPriorities = TaskLogic.toggle(current, key))).openBarIfFilteredEmpty(now)
     }
   }
 }

@@ -14,7 +14,7 @@ class TasksWidgetReceiver : GlanceAppWidgetReceiver() {
 
   override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
     super.onUpdate(context, appWidgetManager, appWidgetIds)
-    appWidgetIds.forEach { WidgetWork.refresh(context, it, manual = false) }
+    appWidgetIds.forEach { WidgetWork.refresh(context, it, manual = false, dedupe = true) }
     runCatching { WidgetUpdater.schedulePeriodic(context) }
   }
 

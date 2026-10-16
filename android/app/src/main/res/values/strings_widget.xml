@@ -4,13 +4,13 @@
     <string name="w_setup_action">Tap to set up</string>
     <string name="w_error_title">Unable to load tasks</string>
     <string name="w_error_retry">Tap to retry</string>
+    <string name="w_error_fix_token">Tap to update your token</string>
     <string name="w_all_clear">All clear</string>
     <string name="w_no_matching">No matching tasks</string>
     <string name="w_filter_empty">No tasks match the current filters</string>
     <string name="w_refreshing">Refreshing…</string>
     <string name="w_filtered">filtered</string>
     <string name="w_offline">offline</string>
-    <string name="w_token_invalid">token invalid</string>
     <string name="w_task_one">task</string>
     <string name="w_task_many">tasks</string>
     <string name="w_more">+%1$d more</string>
