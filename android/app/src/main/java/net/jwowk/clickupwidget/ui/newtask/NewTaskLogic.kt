@@ -6,10 +6,12 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.model.AppSettings
 import net.jwowk.clickupwidget.data.model.ClickUpApiException
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NoTokenException
+import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 
 /** The due-date chips on the New task sheet. */
@@ -64,6 +66,31 @@ internal object NewTaskLogic {
       ListRef(settings.lastNewTaskListId, settings.lastNewTaskListName.ifBlank { settings.lastNewTaskListId }, "")
     else -> null
   }
+
+  /**
+   * The statuses this widget's Status filter currently shows: the effective chip selection when it narrows
+   * the list (a proper non-empty subset of the statuses present), else empty = every status is shown.
+   */
+  fun visibleStatuses(selected: Set<String>, present: List<TaskStatus>): Set<String> =
+    if (selected.isNotEmpty() && selected.size < present.size) selected.map(TaskLogic::normStatus).toSet() else emptySet()
+
+  /**
+   * Status preselected for a new task: the first open (not done/closed) status of the list that the widget's
+   * filter shows, so the task appears in the widget right away. Null = the list's default (first) status.
+   */
+  fun defaultStatus(statuses: List<TaskStatus>, visible: Set<String>): String? {
+    if (visible.isEmpty()) return null
+    return statuses.firstOrNull { !isDoneType(it.type) && TaskLogic.normStatus(it.name) in visible }?.name
+  }
+
+  /** True when a task created in [status] (null = first of [statuses]) would be hidden by the widget's filter. */
+  fun hiddenByFilter(status: String?, statuses: List<TaskStatus>, visible: Set<String>): Boolean {
+    if (visible.isEmpty()) return false
+    val effective = status ?: statuses.firstOrNull()?.name ?: return false
+    return TaskLogic.normStatus(effective) !in visible
+  }
+
+  private fun isDoneType(type: String) = type == "done" || type == "closed"
 
   fun errorFor(t: Throwable): NewTaskError = when {
     t is NoTokenException -> NewTaskError.INVALID_TOKEN

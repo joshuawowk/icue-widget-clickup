@@ -203,8 +203,11 @@ class Handler(BaseHTTPRequestHandler):
                 with state_lock:
                     tid = f"n{len(TASKS) + 1}"
                     prio = PRIO_BY_ID.get(body.get("priority"))
+                    want = str(body.get("status") or "").lower()
+                    names = [st[0] for st in STATUSES[parts[1]]]
+                    status = next((n for n in names if n.lower() == want), names[0])
                     TASKS[tid] = {
-                        "id": tid, "name": body["name"], "list_id": parts[1], "status": STATUSES[parts[1]][0][0],
+                        "id": tid, "name": body["name"], "list_id": parts[1], "status": status,
                         "due_date": None if body.get("due_date") is None else str(body["due_date"]),
                         "priority": None if prio is None else {"id": "1", "priority": prio, "color": PRIO[prio]},
                         "tags": [], "parent": None, "text_content": body.get("description", ""),

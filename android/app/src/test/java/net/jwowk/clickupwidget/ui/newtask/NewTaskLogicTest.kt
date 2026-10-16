@@ -7,6 +7,7 @@ import java.time.ZonedDateTime
 import net.jwowk.clickupwidget.data.model.AppSettings
 import net.jwowk.clickupwidget.data.model.ClickUpApiException
 import net.jwowk.clickupwidget.data.model.NoTokenException
+import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -111,5 +112,35 @@ class NewTaskLogicTest {
     assertEquals(NewTaskError.SERVER, NewTaskLogic.errorFor(ClickUpApiException(500)))
     assertEquals(NewTaskError.NETWORK, NewTaskLogic.errorFor(IOException("offline")))
     assertEquals(NewTaskError.UNKNOWN, NewTaskLogic.errorFor(IllegalStateException()))
+  }
+
+  private val inbox = TaskStatus("INBOX", "#87909e", "open", 0)
+  private val backlog = TaskStatus("backlog", "#87909e", "unstarted", 1)
+  private val inProgress = TaskStatus("in-progress", "#4194f6", "custom", 2)
+  private val done = TaskStatus("done", "#6bc950", "closed", 3)
+  private val listStatuses = listOf(inbox, backlog, inProgress, done)
+
+  @Test fun visibleStatuses_onlyWhenTheFilterNarrows() {
+    val present = listOf(inbox, inProgress)
+    assertEquals(setOf("inprogress"), NewTaskLogic.visibleStatuses(setOf("In-Progress"), present))
+    assertEquals(emptySet<String>(), NewTaskLogic.visibleStatuses(setOf("INBOX", "in-progress"), present))
+    assertEquals(emptySet<String>(), NewTaskLogic.visibleStatuses(emptySet(), present))
+  }
+
+  @Test fun defaultStatus_picksAnOpenStatusTheWidgetShows() {
+    assertEquals("in-progress", NewTaskLogic.defaultStatus(listStatuses, setOf("inprogress")))
+    // Nothing narrowed -> the list's own default (first status).
+    assertNull(NewTaskLogic.defaultStatus(listStatuses, emptySet()))
+    // Never preselect a done/closed status even if the filter shows it.
+    assertNull(NewTaskLogic.defaultStatus(listStatuses, setOf("done")))
+    // Filter shows a status this list doesn't have -> list default.
+    assertNull(NewTaskLogic.defaultStatus(listStatuses, setOf("review")))
+  }
+
+  @Test fun hiddenByFilter_usesTheListDefaultWhenNoneChosen() {
+    assertTrue(NewTaskLogic.hiddenByFilter(null, listStatuses, setOf("inprogress")))
+    assertFalse(NewTaskLogic.hiddenByFilter("in-progress", listStatuses, setOf("inprogress")))
+    assertFalse(NewTaskLogic.hiddenByFilter(null, listStatuses, emptySet()))
+    assertTrue(NewTaskLogic.hiddenByFilter("backlog", listStatuses, setOf("inprogress")))
   }
 }

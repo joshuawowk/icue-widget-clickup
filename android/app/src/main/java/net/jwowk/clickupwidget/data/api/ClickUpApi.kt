@@ -256,6 +256,7 @@ class ClickUpApi(
     val body = buildJsonObject {
       put("name", name)
       if (task.description.isNotBlank()) put("description", task.description)
+      task.status?.takeIf { it.isNotBlank() }?.let { put("status", it) }
       task.priority.apiValue?.let { put("priority", it) }
       task.dueMs?.let {
         put("due_date", it)

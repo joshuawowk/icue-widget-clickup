@@ -93,6 +93,7 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
     return mutex.withLock {
       val id = "demo-new-${++createdCount}"
       val list = LISTS.firstOrNull { it.id == task.listId }
+      val status = task.status?.let { s -> STATUSES.firstOrNull { TaskLogic.normStatus(it.name) == TaskLogic.normStatus(s) } } ?: TO_DO
       val created = TaskItem(
         id = id,
         name = name,
@@ -101,9 +102,9 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
         dueMs = task.dueMs,
         priority = task.priority,
         priorityColorHex = PRIORITY_COLORS[task.priority],
-        status = TO_DO.name,
-        statusColorHex = TO_DO.colorHex,
-        statusType = TO_DO.type,
+        status = status.name,
+        statusColorHex = status.colorHex,
+        statusType = status.type,
       )
       tasks.add(0, created)
       if (!task.assignToMe) notMine += id

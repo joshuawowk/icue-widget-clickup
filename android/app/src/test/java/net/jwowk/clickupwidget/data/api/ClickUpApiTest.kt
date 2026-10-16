@@ -514,4 +514,11 @@ class ClickUpApiTest {
     } catch (_: java.io.IOException) {
     }
   }
+
+  @Test
+  fun createTask_sendsChosenStatus() = runTest {
+    route("POST /list/77/task", """{"id":"new4","name":"S"}""")
+    api().createTask(NewTask(listId = "77", name = "S", assignToMe = false, status = "in-progress"))
+    assertEquals("""{"name":"S","status":"in-progress"}""", requests("/list/77/task").single().body.readUtf8())
+  }
 }

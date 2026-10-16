@@ -97,6 +97,8 @@ data class NewTask(
   val priority: Priority = Priority.NONE,
   /** Assign to the token's user (needed for the task to show up in My Tasks mode). */
   val assignToMe: Boolean = true,
+  /** Status name on the target list; null = the list's default (first) status. */
+  val status: String? = null,
 )
 
 @Serializable

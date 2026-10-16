@@ -64,6 +64,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import net.jwowk.clickupwidget.R
+import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.ui.common.SwitchRow
 import net.jwowk.clickupwidget.ui.config.ListPickerDialog
@@ -147,6 +148,8 @@ private fun SheetContent(vm: NewTaskViewModel, onDismiss: () -> Unit) {
     )
 
     ListRow(vm, onChange = { showListPicker = true })
+
+    if (vm.list != null) StatusSection(vm)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
       FieldLabel(stringResource(R.string.newtask_due))
@@ -279,6 +282,48 @@ private fun ListRow(vm: NewTaskViewModel, onChange: () -> Unit) {
     }
     TextButton(onClick = onChange, enabled = !vm.busy) {
       Text(stringResource(if (list == null) R.string.newtask_list_choose else R.string.newtask_list_change))
+    }
+  }
+}
+
+/** The chosen list's statuses as chips (null selection = the list's default, its first status). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StatusSection(vm: NewTaskViewModel) {
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    FieldLabel(stringResource(R.string.newtask_status))
+    when {
+      vm.statusesLoading -> Text(
+        stringResource(R.string.newtask_status_loading),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      vm.statuses.isEmpty() -> Text(
+        stringResource(if (vm.statusesFailed) R.string.newtask_status_failed else R.string.newtask_status_default),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+      else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val effective = vm.status ?: vm.statuses.first().name
+        vm.statuses.forEach { s ->
+          val color = Color(TaskLogic.parseColor(s.colorHex))
+          FilterChip(
+            selected = s.name == effective,
+            onClick = { vm.status = s.name },
+            enabled = !vm.busy,
+            label = { Text(s.name) },
+            leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(color)) },
+            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = color.copy(alpha = 0.25f)),
+          )
+        }
+      }
+    }
+    if (vm.hiddenByFilter) {
+      Text(
+        stringResource(R.string.newtask_status_hidden),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
     }
   }
 }

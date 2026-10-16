@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -18,7 +19,9 @@ import net.jwowk.clickupwidget.R
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
+import net.jwowk.clickupwidget.widget.WidgetStore
 import net.jwowk.clickupwidget.widget.WidgetUpdater
 
 /** Process-lifetime scope so a create that was sent still finishes (and refreshes the widget) if the sheet is dismissed. */
@@ -49,6 +52,24 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
   var priority by mutableStateOf(Priority.NONE)
   var assignToMe by mutableStateOf(true)
 
+  /** Statuses of the chosen list (empty until loaded / when loading failed). */
+  var statuses by mutableStateOf<List<TaskStatus>>(emptyList())
+    private set
+  var statusesLoading by mutableStateOf(false)
+    private set
+  var statusesFailed by mutableStateOf(false)
+    private set
+
+  /** Chosen status name; null = the list's default (first) status. */
+  var status by mutableStateOf<String?>(null)
+
+  /** Normalized status names the widget's filter shows (empty = all). */
+  private var visibleStatuses: Set<String> = emptySet()
+  private var statusJob: Job? = null
+
+  /** The chosen (or default) status would be hidden by this widget's status filter. */
+  val hiddenByFilter: Boolean get() = NewTaskLogic.hiddenByFilter(status, statuses, visibleStatuses)
+
   var busy by mutableStateOf(false)
     private set
   var error by mutableStateOf<NewTaskError?>(null)
@@ -75,11 +96,20 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
     priority = Priority.NONE
     assignToMe = true
     error = null
+    status = null
+    statuses = emptyList()
     appWidgetId = widgetId
     config = Graph.configStore.widgetConfig(widgetId)
+    visibleStatuses = emptySet()
+    viewModelScope.launch {
+      visibleStatuses = runCatching { widgetVisibleStatuses(widgetId) }.getOrDefault(emptySet())
+      // Re-pick the default now that the filter is known (unless the user already chose one).
+      if (status == null) status = NewTaskLogic.defaultStatus(statuses, visibleStatuses)
+    }
     val settings = Graph.configStore.appSettings()
     val scope = if (settings.demoMode) "demo" else config.workspaceId
     list = NewTaskLogic.initialList(config, settings, scope)
+    list?.let { loadStatuses(it.id) }
     if (scope == null && list == null && !config.isListMode && settings.lastNewTaskListId.isNotBlank()) {
       // Workspace not pinned: the scope is the first workspace, which needs a lookup.
       val session = widgetId
@@ -87,6 +117,7 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
         val resolved = runCatching { Graph.repository().workspaces().firstOrNull()?.id }.getOrNull() ?: return@launch
         if (list == null && appWidgetId == session) {
           list = NewTaskLogic.initialList(config, Graph.configStore.appSettings(), resolved)
+          list?.let { loadStatuses(it.id) }
         }
       }
     }
@@ -102,7 +133,40 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   fun chooseList(picked: ListRef) {
-    list = picked
+    if (picked.id != list?.id) {
+      list = picked
+      loadStatuses(picked.id)
+    }
+  }
+
+  private fun loadStatuses(listId: String) {
+    statusJob?.cancel()
+    statuses = emptyList()
+    status = null
+    statusesFailed = false
+    statusesLoading = true
+    statusJob = viewModelScope.launch {
+      val loaded = try {
+        Graph.repository().listStatuses(listId)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        null
+      }
+      if (list?.id != listId) return@launch
+      statusesLoading = false
+      statusesFailed = loaded == null
+      statuses = loaded.orEmpty()
+      status = NewTaskLogic.defaultStatus(statuses, visibleStatuses)
+    }
+  }
+
+  /** What this widget's Status chips currently show, from its rendered state (empty = everything). */
+  private suspend fun widgetVisibleStatuses(widgetId: Int): Set<String> {
+    val context = getApplication<Application>()
+    val glanceId = WidgetStore.glanceIdOrNull(context, widgetId) ?: return emptySet()
+    val view = WidgetStore.read(context, glanceId).view(System.currentTimeMillis())
+    return NewTaskLogic.visibleStatuses(view.selectedStatuses, view.presentStatuses)
   }
 
   /** All lists of the widget's workspace for the picker (cached for the sheet's lifetime). Throws on failure. */
@@ -125,7 +189,9 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
       dueMs = NewTaskLogic.dueMs(dueChoice, pickedEpochDay, System.currentTimeMillis()),
       priority = priority,
       assignToMe = assignToMe,
+      status = status,
     )
+    val hidden = hiddenByFilter
     val widgetId = appWidgetId
     val rememberList = !config.isListMode
     val context = getApplication<Application>()
@@ -155,7 +221,10 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
         }
       }
       runCatching { WidgetUpdater.refreshNow(context, widgetId.takeIf { it != AppWidgetManager.INVALID_APPWIDGET_ID }) }
-      runCatching { Toast.makeText(context, R.string.newtask_created, Toast.LENGTH_SHORT).show() }
+      runCatching {
+        val msg = if (hidden) R.string.newtask_created_hidden else R.string.newtask_created
+        Toast.makeText(context, msg, if (hidden) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+      }
     }
   }
 }
