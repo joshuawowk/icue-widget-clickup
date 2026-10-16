@@ -5,6 +5,8 @@ import net.jwowk.clickupwidget.Graph
 import net.jwowk.clickupwidget.data.api.ClickUpApi
 import net.jwowk.clickupwidget.data.model.AccountInfo
 import net.jwowk.clickupwidget.data.model.ListRef
+import net.jwowk.clickupwidget.data.model.NewTask
+import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.TaskDetail
 import net.jwowk.clickupwidget.data.model.TaskFetch
 import net.jwowk.clickupwidget.data.model.TaskItem
@@ -45,9 +47,8 @@ class ClickUpTaskRepository(context: Context, private val tokenStore: TokenStore
   override suspend fun taskDetail(task: TaskItem): TaskDetail = api().taskDetail(task)
   override suspend fun completeTask(taskId: String, listId: String) = api().completeTask(taskId, listId)
   override suspend fun setStatus(taskId: String, status: String) = api().setStatus(taskId, status)
-  // TODO(data agent): implement
-  override suspend fun setPriority(taskId: String, priority: net.jwowk.clickupwidget.data.model.Priority): Unit = TODO()
-  override suspend fun createTask(task: net.jwowk.clickupwidget.data.model.NewTask): net.jwowk.clickupwidget.data.model.TaskItem = TODO()
+  override suspend fun setPriority(taskId: String, priority: Priority) = api().setPriority(taskId, priority)
+  override suspend fun createTask(task: NewTask): TaskItem = api().createTask(task)
 
   private companion object {
     const val DEFAULT_BASE_URL = "https://api.clickup.com/api/v2"
