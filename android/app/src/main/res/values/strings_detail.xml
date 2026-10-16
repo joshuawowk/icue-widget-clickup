@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="detail_close">Close</string>
+    <string name="detail_loading">Loading details…</string>
+    <string name="detail_load_failed">Couldn\'t load details</string>
+    <string name="detail_show_more">Show more</string>
+    <string name="detail_show_less">Show less</string>
+    <string name="detail_subtasks">Subtasks</string>
+    <string name="detail_subtasks_progress">%1$d of %2$d done</string>
+    <string name="detail_subtask_complete_cd">Mark \"%1$s\" complete</string>
+    <string name="detail_subtask_done_cd">Completed</string>
+    <string name="detail_status_heading">Status</string>
+    <string name="detail_statuses_loading">Loading statuses…</string>
+    <string name="detail_statuses_failed">Could not load statuses</string>
+    <string name="detail_open_in_clickup">Open in ClickUp</string>
+    <string name="detail_mark_complete">Mark complete</string>
+    <string name="detail_completing">Completing \"%1$s\"</string>
+    <string name="detail_undo">Undo</string>
+    <string name="detail_status_changed">Status → %1$s</string>
+    <string name="detail_status_failed">Could not change status — try again</string>
+    <string name="detail_complete_failed">Could not complete task — try again</string>
+    <string name="detail_subtask_complete_failed">Could not complete subtask — try again</string>
+    <string name="detail_no_list">Cannot complete — list unknown</string>
+    <string name="detail_no_app">No app can open this link</string>
+</resources>
