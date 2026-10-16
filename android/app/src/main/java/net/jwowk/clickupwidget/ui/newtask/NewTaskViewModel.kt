@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,7 +77,19 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
     error = null
     appWidgetId = widgetId
     config = Graph.configStore.widgetConfig(widgetId)
-    list = NewTaskLogic.initialList(config, Graph.configStore.appSettings())
+    val settings = Graph.configStore.appSettings()
+    val scope = if (settings.demoMode) "demo" else config.workspaceId
+    list = NewTaskLogic.initialList(config, settings, scope)
+    if (scope == null && list == null && !config.isListMode && settings.lastNewTaskListId.isNotBlank()) {
+      // Workspace not pinned: the scope is the first workspace, which needs a lookup.
+      val session = widgetId
+      viewModelScope.launch {
+        val resolved = runCatching { Graph.repository().workspaces().firstOrNull()?.id }.getOrNull() ?: return@launch
+        if (list == null && appWidgetId == session) {
+          list = NewTaskLogic.initialList(config, Graph.configStore.appSettings(), resolved)
+        }
+      }
+    }
   }
 
   fun chooseDue(choice: DueChoice) {
@@ -119,19 +132,30 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
     NewTaskWork.scope.launch {
       try {
         Graph.repository().createTask(request)
-        if (rememberList) {
-          val store = Graph.configStore
-          store.saveAppSettings(store.appSettings().copy(lastNewTaskListId = target.id, lastNewTaskListName = target.name))
-        }
-        WidgetUpdater.refreshNow(context, widgetId.takeIf { it != AppWidgetManager.INVALID_APPWIDGET_ID })
-        Toast.makeText(context, R.string.newtask_created, Toast.LENGTH_SHORT).show()
-        created = true
       } catch (e: CancellationException) {
         throw e
       } catch (e: Exception) {
         error = NewTaskLogic.errorFor(e)
         busy = false
+        return@launch
       }
+      // The task exists now: nothing below may surface an error or re-enable Create.
+      created = true
+      if (rememberList) {
+        runCatching {
+          val store = Graph.configStore
+          val settings = store.appSettings()
+          val scope = if (settings.demoMode) "demo"
+          else config.workspaceId ?: Graph.repository().workspaces().firstOrNull()?.id
+          if (scope != null) {
+            store.saveAppSettings(
+              settings.copy(lastNewTaskListId = target.id, lastNewTaskListName = target.name, lastNewTaskScope = scope),
+            )
+          }
+        }
+      }
+      runCatching { WidgetUpdater.refreshNow(context, widgetId.takeIf { it != AppWidgetManager.INVALID_APPWIDGET_ID }) }
+      runCatching { Toast.makeText(context, R.string.newtask_created, Toast.LENGTH_SHORT).show() }
     }
   }
 }

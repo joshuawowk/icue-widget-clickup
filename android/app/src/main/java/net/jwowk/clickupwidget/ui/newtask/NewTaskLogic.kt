@@ -16,7 +16,7 @@ import net.jwowk.clickupwidget.data.model.WidgetConfig
 internal enum class DueChoice { NONE, TODAY, TOMORROW, PICK }
 
 /** Why creating a task failed, for the inline error. */
-internal enum class NewTaskError { INVALID_TOKEN, NETWORK, SERVER, UNKNOWN }
+internal enum class NewTaskError { INVALID_TOKEN, LIST_NOT_FOUND, NETWORK, SERVER, UNKNOWN }
 
 /** Pure rules behind the New task sheet (free of Android types so they unit-test on the JVM). */
 internal object NewTaskLogic {
@@ -55,11 +55,12 @@ internal object NewTaskLogic {
 
   /**
    * The list the sheet starts on: the widget's list in list mode, otherwise the last list used from
-   * "New task" (or null if there is none yet).
+   * "New task" (or null if there is none yet, or it was picked in another scope). [scope] is the current
+   * scope ("demo" or the workspace id; null while unknown) and must equal [AppSettings.lastNewTaskScope].
    */
-  fun initialList(config: WidgetConfig, settings: AppSettings): ListRef? = when {
+  fun initialList(config: WidgetConfig, settings: AppSettings, scope: String?): ListRef? = when {
     config.isListMode -> ListRef(config.listId, config.listName.ifBlank { config.listId }, "")
-    settings.lastNewTaskListId.isNotBlank() ->
+    settings.lastNewTaskListId.isNotBlank() && scope != null && settings.lastNewTaskScope == scope ->
       ListRef(settings.lastNewTaskListId, settings.lastNewTaskListName.ifBlank { settings.lastNewTaskListId }, "")
     else -> null
   }
@@ -67,6 +68,7 @@ internal object NewTaskLogic {
   fun errorFor(t: Throwable): NewTaskError = when {
     t is NoTokenException -> NewTaskError.INVALID_TOKEN
     t is ClickUpApiException && t.code == 401 -> NewTaskError.INVALID_TOKEN
+    t is ClickUpApiException && (t.code == 404 || t.code == 403) -> NewTaskError.LIST_NOT_FOUND
     t is ClickUpApiException -> NewTaskError.SERVER
     t is IOException -> NewTaskError.NETWORK
     else -> NewTaskError.UNKNOWN
