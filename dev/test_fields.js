@@ -22,6 +22,8 @@ const t = {
     cf('emoji', 3, { count: 5 }), cf('automatic_progress', { percent_complete: 33 }), cf('automatic_progress', { percent_complete: 0 }),
     cf('manual_progress', { percent_completed: 50 }), cf('location', { formatted_address: '1 Main St' }),
     cf('formula', 42), cf('attachment', [{}, {}]), cf('url', null), cf('weird', 'plain'), cf('weird', { a: 1 }), cf('text', []),
+    cf('emoji', 3, {}), cf('emoji', 50, { count: 99 }), cf('emoji', 0, { count: 5 }), cf('emoji', 9, { count: 5 }),
+    cf('formula', { a: 1 }), { type: 'number', name: '  ', value: 7 },
   ],
 };
 const got = formatTaskFields(t).map(f => f.name + '=' + f.value + (f.color ? '@' + f.color : ''));
@@ -30,11 +32,13 @@ const want = [
   'drop_down-f=Ariana Carlone@#9b59b6', 'drop_down-f=Becky@#800000', 'date-f=Thu, Oct 15, 2026', 'short_text-f=INC2383904', 'number-f=9',
   'currency-f=USD 12.5', 'text-f=Good day,\n\nthere', 'checkbox-f=Yes', 'labels-f=One, Two', 'users-f=A, B', 'tasks-f=T1', 'emoji-f=★★★☆☆',
   'automatic_progress-f=33%', 'manual_progress-f=50%', 'location-f=1 Main St', 'formula-f=42', 'attachment-f=2 files', 'weird-f=plain',
+  'emoji-f=★★★☆☆', 'emoji-f=' + '★'.repeat(20), 'emoji-f=★★★★★',
 ];
 let bad = 0;
 want.forEach((w, i) => { if (got[i] !== w) { bad++; console.log('MISMATCH', i, JSON.stringify(got[i]), 'want', JSON.stringify(w)); } });
 if (got.length !== want.length) { bad++; console.log('length', got.length, 'want', want.length, got); }
 const est = formatTaskFields({ time_estimate: 2700000 }).map(f => f.value).concat(formatTaskFields({ time_estimate: 7200000 }).map(f => f.value));
-if (est.join('|') !== '45m|2h') { bad++; console.log('estimate', est); }
+est.push(...formatTaskFields({ time_estimate: 20000 }).map(f => f.value), ...formatTaskFields({ time_estimate: 0 }).map(f => f.value));
+if (est.join('|') !== '45m|2h|1m') { bad++; console.log('estimate', est); }
 console.log(bad ? 'FAIL' : 'ok (' + got.length + ' fields)');
 process.exit(bad ? 1 : 0);

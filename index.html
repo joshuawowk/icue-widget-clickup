@@ -266,6 +266,7 @@
     let lastGoodTasks = null;
     let refreshTimer = null;
     let fetchInFlight = false;
+    let refetchQueued = false;   // loadTasks() called mid-fetch: run once more when it settles
     const listStatusCache = new Map();   // listId -> [{status, color, type}]
 
     /* ---------- Filters (status + priority) ---------- */
@@ -390,7 +391,7 @@
     async function loadTasks() {
       const token = getIcueProperty('apiToken');
       if (!token) { if (!detailOpen) showState('setup-state'); return; }
-      if (fetchInFlight) return;
+      if (fetchInFlight) { refetchQueued = true; return; }
       fetchInFlight = true;
       try {
         const listIdSetting = (getIcueProperty('listId') || '').toString().trim();
@@ -421,6 +422,7 @@
         }
       } finally {
         fetchInFlight = false;
+        if (refetchQueued) { refetchQueued = false; loadTasks(); }
       }
     }
 
@@ -843,6 +845,7 @@
       if (subSection) subSection.style.display = 'none';
       document.getElementById('detailSubtasks').innerHTML = '';
       const stWrap = document.getElementById('detailStatuses');
+      stWrap.classList.remove('busy');
       stWrap.innerHTML = '<div class="statuses-loading">Loading statuses…</div>';
       showState('detail-view');
 
@@ -895,7 +898,7 @@
             showToast('Could not change status — try again', null, null, 4000);
           } finally {
             btn.classList.remove('saving');
-            wrap.classList.remove('busy');
+            if (detailTask === task) wrap.classList.remove('busy');
           }
         });
         wrap.appendChild(btn);
@@ -913,6 +916,7 @@
 
     function renderPriorityButtons(task) {
       const wrap = document.getElementById('detailPriorities');
+      wrap.classList.remove('busy', 'saving');
       wrap.innerHTML = '';
       PRIO_ORDER.forEach(key => {
         const btn = document.createElement('button');
@@ -963,7 +967,7 @@
         if (detailTask === task) renderPriorityButtons(task);
         showToast('Could not change priority — try again', null, null, 4000);
       } finally {
-        wrap.classList.remove('busy');
+        if (detailTask === task) wrap.classList.remove('busy', 'saving');
       }
     }
 
@@ -977,8 +981,9 @@
     }
 
     function fmtEstimate(ms) {
-      const mins = Math.round(Number(ms) / 60000);
-      if (!Number.isFinite(mins) || mins <= 0) return null;
+      const msn = Number(ms);
+      if (!(msn > 0) || !Number.isFinite(msn)) return null;
+      const mins = Math.max(1, Math.round(msn / 60000));
       const h = Math.floor(mins / 60), m = mins % 60;
       return (h ? h + 'h' : '') + (h && m ? ' ' : '') + (m ? m + 'm' : '');
     }
@@ -1012,7 +1017,7 @@
           return opt ? { value: opt.name, color: opt.color || null } : null;
         }
         case 'labels': {
-          const byId = new Map(options.map(o => [o.id, o.label || o.name]));
+          const byId = new Map(options.map(o => [o.id, (typeof o.label === 'string' && o.label.trim()) ? o.label : o.name]));
           return joinNames(v, id => byId.get(id));
         }
         case 'date': return fmtFieldDate(v);
@@ -1020,9 +1025,10 @@
         case 'users': return joinNames(v, u => u && u.username);
         case 'tasks': return joinNames(v, t => t && t.name);
         case 'emoji': {
-          const n = Math.floor(Number(v));
+          const count = Math.min(20, Math.max(1, Math.floor(Number(cfg.count)) || 5));
+          const n = Math.min(Math.floor(Number(v)), count);
           if (!Number.isFinite(n) || n <= 0) return null;   // an unrated field counts as empty
-          const total = Math.max(n, Math.floor(Number(cfg.count)) || 0);
+          const total = count;
           return '★'.repeat(n) + '☆'.repeat(total - n);
         }
         case 'automatic_progress': case 'manual_progress': {
@@ -1031,7 +1037,7 @@
           return Number.isFinite(n) && n > 0 ? n + '%' : null;
         }
         case 'location': return (v && v.formatted_address) ? String(v.formatted_address) : null;
-        case 'formula': return String(v);
+        case 'formula': return (typeof v === 'object') ? null : String(v);
         case 'attachment': return (Array.isArray(v) && v.length) ? (v.length === 1 ? '1 file' : v.length + ' files') : null;
         default: {
           if (typeof v === 'object') return null;
@@ -1057,6 +1063,7 @@
       if (created) add('Created', created + (t.creator && t.creator.username ? ' by ' + t.creator.username : ''));
 
       (t.custom_fields || []).forEach(f => {
+        if (!f || typeof f.name !== 'string' || !f.name.trim()) return;
         const r = formatCustomField(f);
         if (r === null || r === undefined) return;
         if (typeof r === 'string') add(f.name, r);
