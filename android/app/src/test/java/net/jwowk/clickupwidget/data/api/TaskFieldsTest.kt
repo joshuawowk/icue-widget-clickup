@@ -265,4 +265,14 @@ class TaskFieldsTest {
     val o: JsonObject = Json.parseToJsonElement("""{"assignees":"x","custom_fields":{"a":1},"creator":5,"tags":3}""").jsonObject
     assertTrue(taskFields(o, Locale.US, utc).isEmpty())
   }
+
+  @Test
+  fun unifiedRules_progressLabelsEmoji() {
+    assertNull(single("manual_progress", """{"percent_complete":0.4}"""))
+    assertEquals(TaskField("F", "1%"), single("manual_progress", """{"percent_complete":0.6}"""))
+    val cfg = """{"options":[{"id":"x","label":"","name":"Fallback"},{"id":"y","label":"Blue","name":"n"}]}"""
+    assertEquals(TaskField("F", "Fallback, Blue"), single("labels", """["x","y"]""", cfg))
+    assertEquals(TaskField("F", "★★★★★"), single("emoji", "5"))
+    assertEquals(TaskField("F", "★★★"), single("emoji", "7", """{"count":3}"""))
+  }
 }
