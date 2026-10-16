@@ -3,6 +3,8 @@ package net.jwowk.clickupwidget.ui.detail
 import net.jwowk.clickupwidget.data.DueClass
 import net.jwowk.clickupwidget.data.DueInfo
 import net.jwowk.clickupwidget.data.TaskLogic
+import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskItem
 import java.time.Instant
 import java.time.ZoneId
@@ -50,4 +52,41 @@ internal object DetailFormat {
 
   /** The priority badge color: ClickUp's own color for the task, else the Priority default. */
   fun priorityColor(task: TaskItem): Long = TaskLogic.parseColor(task.priorityColorHex, task.priority.chipColor)
+
+  /** Max lines a field value shows before its "Show more" toggle. */
+  const val FIELD_MAX_LINES = 4
+
+  /** Priority pills in display order: Urgent, High, Normal, Low, None. */
+  val priorityChoices: List<Priority> = listOf(Priority.URGENT, Priority.HIGH, Priority.NORMAL, Priority.LOW, Priority.NONE)
+
+  /** The FIELDS section is shown only when there is at least one populated field. */
+  fun showFields(fields: List<TaskField>): Boolean = fields.any { it.name.isNotBlank() && it.value.isNotBlank() }
+
+  /** The TAGS section is shown only when the task has tags. */
+  fun showTags(task: TaskItem): Boolean = task.tags.isNotEmpty()
+
+  /** ClickUp's background color for [tag] as ARGB, or null when it has none (chip falls back to muted). */
+  fun tagColor(task: TaskItem, tag: String): Long? {
+    val hex = task.tagColors[tag]?.takeIf { it.isNotBlank() } ?: return null
+    val c = TaskLogic.parseColor(hex, -1L)
+    return c.takeIf { it != -1L }
+  }
+
+  fun isCurrentPriority(candidate: Priority, current: Priority): Boolean = candidate == current
+
+  /**
+   * The task to display once the detail request returns. [fresh] wins (tags, tag colors, priority...) except
+   * that the list is kept when the response omits it, the priority is kept while a local change is saved
+   * or has been saved ([keepPriority]), and the status is kept while a status change is saving ([keepStatus]).
+   */
+  fun mergeFreshTask(current: TaskItem, fresh: TaskItem, keepPriority: Boolean, keepStatus: Boolean): TaskItem {
+    var t = fresh.copy(
+      listId = fresh.listId ?: current.listId,
+      listName = fresh.listName.ifBlank { current.listName },
+      url = fresh.url ?: current.url,
+    )
+    if (keepPriority) t = t.copy(priority = current.priority, priorityColorHex = current.priorityColorHex)
+    if (keepStatus) t = t.copy(status = current.status, statusColorHex = current.statusColorHex, statusType = current.statusType)
+    return t
+  }
 }
