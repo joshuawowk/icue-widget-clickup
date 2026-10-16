@@ -103,7 +103,13 @@ class UndoAction : ActionCallback {
 /** Refresh button / error-state tap. */
 class RefreshAction : ActionCallback {
   override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-    WidgetStore.updateAndRender(context, glanceId) { it.copy(ui = it.ui.copy(refreshing = true)) }
+    var already = false
+    WidgetStore.update(context, glanceId) { s ->
+      already = s.ui.refreshing
+      if (already) s else s.copy(ui = s.ui.copy(refreshing = true))
+    }
+    if (already) return
+    TasksWidget().update(context, glanceId)
     WidgetWork.refresh(context, WidgetStore.appWidgetId(context, glanceId), manual = true)
   }
 }
