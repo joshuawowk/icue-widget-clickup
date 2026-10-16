@@ -1,6 +1,7 @@
 package net.jwowk.clickupwidget.ui.config
 
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -17,6 +18,7 @@ import androidx.lifecycle.viewmodel.initializer
 import kotlinx.coroutines.launch
 import net.jwowk.clickupwidget.Graph
 import net.jwowk.clickupwidget.theme.ClickUpTasksTheme
+import net.jwowk.clickupwidget.widget.TasksWidgetReceiver
 import net.jwowk.clickupwidget.widget.WidgetUpdater
 
 /**
@@ -36,7 +38,7 @@ class ConfigActivity : ComponentActivity() {
     appWidgetId = intent?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
       ?: AppWidgetManager.INVALID_APPWIDGET_ID
     setResult(RESULT_CANCELED, resultIntent())
-    if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+    if (!isOurWidget(appWidgetId)) {
       finish()
       return
     }
@@ -46,6 +48,13 @@ class ConfigActivity : ComponentActivity() {
         ConfigScreen(vm, saving = saving, onSave = ::save, onCancel = ::finish)
       }
     }
+  }
+
+  /** Rejects ids that are invalid or belong to another app's widget provider. */
+  private fun isOurWidget(id: Int): Boolean {
+    if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return false
+    val provider = AppWidgetManager.getInstance(this).getAppWidgetInfo(id)?.provider ?: return false
+    return provider == ComponentName(this, TasksWidgetReceiver::class.java)
   }
 
   private fun resultIntent() = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)

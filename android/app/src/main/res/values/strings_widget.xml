@@ -10,6 +10,7 @@
     <string name="w_refreshing">Refreshing…</string>
     <string name="w_filtered">filtered</string>
     <string name="w_offline">offline</string>
+    <string name="w_token_invalid">token invalid</string>
     <string name="w_task_one">task</string>
     <string name="w_task_many">tasks</string>
     <string name="w_more">+%1$d more</string>

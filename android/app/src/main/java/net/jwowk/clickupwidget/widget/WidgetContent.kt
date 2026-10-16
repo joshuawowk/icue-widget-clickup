@@ -267,7 +267,11 @@ private fun Header(
           listOfNotNull(
             state.snapshot.workspaceName.takeIf { it.isNotBlank() },
             context.getString(R.string.w_filtered).takeIf { view.anyConstrained },
-            context.getString(R.string.w_offline).takeIf { state.snapshot.offline },
+            when {
+              !state.snapshot.offline -> null
+              state.snapshot.authError -> context.getString(R.string.w_token_invalid)
+              else -> context.getString(R.string.w_offline)
+            },
           ).joinToString(" • ")
         }
         if (sub.isNotEmpty()) Text(sub, style = style(colors.muted, dims.meta), maxLines = 1)
@@ -277,12 +281,15 @@ private fun Header(
       Spacer(GlanceModifier.width(8.dp))
       Row(verticalAlignment = Alignment.Bottom) {
         Text(view.total.toString(), style = style(colors.accent, dims.count, bold = true), maxLines = 1)
-        Spacer(GlanceModifier.width(4.dp))
-        Text(
-          context.getString(if (view.total == 1) R.string.w_task_one else R.string.w_task_many),
-          modifier = GlanceModifier.padding(bottom = (4f * dims.scale).dp),
-          style = style(colors.muted, dims.meta),
-        )
+        // Narrow widgets drop the "tasks" word so the title keeps its room.
+        if (!dims.bp.narrow) {
+          Spacer(GlanceModifier.width(4.dp))
+          Text(
+            context.getString(if (view.total == 1) R.string.w_task_one else R.string.w_task_many),
+            modifier = GlanceModifier.padding(bottom = (4f * dims.scale).dp),
+            style = style(colors.muted, dims.meta),
+          )
+        }
       }
     }
   }
@@ -302,7 +309,10 @@ private fun AllClear(colors: WidgetColors, dims: Dims) {
   }
 }
 
-private class ChipSpec(val label: String, val color: ColorProvider, val on: Boolean, val action: Action)
+private class ChipSpec(val label: String, val argb: Long, val on: Boolean, val action: Action) {
+  val color: ColorProvider get() = ColorProvider(Color(argb))
+  val fadedColor: ColorProvider get() = ColorProvider(Color(argb).copy(alpha = 0.45f))
+}
 
 private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, dims: Dims, env: WidgetEnv, context: Context) {
   fun section(key: String, label: String, chips: List<ChipSpec>) {
@@ -327,7 +337,7 @@ private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, di
     "status", context.getString(R.string.w_status),
     view.presentStatuses.map { s ->
       ChipSpec(
-        s.name, ColorProvider(Color(TaskLogic.parseColor(s.colorHex))), s.name in view.selectedStatuses,
+        s.name, TaskLogic.parseColor(s.colorHex), s.name in view.selectedStatuses,
         actionRunCallback<ToggleStatusAction>(actionParametersOf(WidgetParams.STATUS to s.name)),
       )
     },
@@ -336,7 +346,7 @@ private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, di
     "priority", context.getString(R.string.w_priority),
     view.presentPriorities.map { p ->
       ChipSpec(
-        p.label, ColorProvider(Color(p.chipColor)), p.key in view.selectedPriorities,
+        p.label, p.chipColor, p.key in view.selectedPriorities,
         actionRunCallback<TogglePriorityAction>(actionParametersOf(WidgetParams.PRIORITY to p.key)),
       )
     },
@@ -376,7 +386,7 @@ private fun Chip(chip: ChipSpec, colors: WidgetColors, dims: Dims, env: WidgetEn
         .clickIf(env) { chip.action },
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Icon(R.drawable.ic_w_dot, if (chip.on) chip.color else colors.faded, 7.dp)
+      Icon(R.drawable.ic_w_dot, if (chip.on) chip.color else chip.fadedColor, 7.dp)
       Spacer(GlanceModifier.width(5.dp))
       Text(chip.label, style = style(if (chip.on) colors.text else colors.faded, dims.chip, bold = chip.on), maxLines = 1)
     }

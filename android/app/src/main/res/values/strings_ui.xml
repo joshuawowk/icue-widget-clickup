@@ -35,7 +35,7 @@
     <string name="ui_source_list">List: %1$s</string>
     <string name="ui_add_widget">Add widget to home screen</string>
     <string name="ui_add_widget_help">Long-press an empty spot on your home screen, tap Widgets, then pick ClickUp Tasks.</string>
-    <string name="ui_widget_settings_hint">Tap a widget above to change its settings. If your launcher has no widget settings option, use the gear in the widget\'s filter bar.</string>
+    <string name="ui_widget_settings_hint">Tap a widget above to change its settings. If your launcher has no widget settings option, tap the widget\'s title, then Settings.</string>
     <string name="ui_settings_title">Settings</string>
     <string name="ui_refresh_interval">Refresh interval</string>
     <string name="ui_undo_delay">Undo delay for quick-complete</string>
@@ -54,7 +54,7 @@
     <string name="ui_preview_unavailable">Preview unavailable</string>
     <string name="ui_preview_workspace">Preview</string>
     <string name="ui_use_sample_tasks">Or use sample tasks</string>
-    <string name="ui_config_launcher_note">On launchers without a widget settings option, this screen is also reachable from the gear in the widget\'s filter bar.</string>
+    <string name="ui_config_launcher_note">On launchers without a widget settings option, this screen is also reachable from the widget: tap its title, then Settings.</string>
     <string name="ui_discard_title">Discard widget?</string>
     <string name="ui_discard_message">This widget has not been set up yet. If you leave now it will be removed from your home screen.</string>
     <string name="ui_discard">Discard</string>

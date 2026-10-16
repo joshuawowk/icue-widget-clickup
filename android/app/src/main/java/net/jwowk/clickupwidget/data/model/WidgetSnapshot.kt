@@ -30,6 +30,8 @@ data class WidgetSnapshot(
   val fetchedAtMs: Long = 0,
   /** True when the last refresh failed but cached [tasks] are still shown ("• offline"). */
   val offline: Boolean = false,
+  /** With [offline]: the failure was a rejected token (401), shown as "• token invalid" instead. */
+  val authError: Boolean = false,
   /** Human-readable error for the ERROR state, e.g. "Invalid API token — check settings". */
   val errorMessage: String? = null,
 )

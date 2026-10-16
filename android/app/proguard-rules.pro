@@ -9,3 +9,6 @@
 }
 # WorkManager instantiates workers reflectively by class name.
 -keep class net.jwowk.clickupwidget.work.** extends androidx.work.ListenableWorker { <init>(...); }
+# Glance instantiates ActionCallbacks reflectively by class name (actionRunCallback<T>()); keep their
+# no-arg constructors or every widget tap fails in release with NoSuchMethodException.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }

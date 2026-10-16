@@ -78,7 +78,9 @@ class RefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 
   private fun failedSnapshot(ctx: Context, prev: WidgetSnapshot, e: Throwable): WidgetSnapshot {
     if (e is NoTokenException) return WidgetSnapshot(loadState = LoadState.SETUP)
-    if (prev.loadState == LoadState.READY) return prev.copy(offline = true)
+    if (prev.loadState == LoadState.READY) {
+      return prev.copy(offline = true, authError = e is ClickUpApiException && e.code == 401)
+    }
     val message = when {
       e is ClickUpApiException && e.code == 401 -> ctx.getString(R.string.w_err_token)
       e is ClickUpApiException -> ctx.getString(R.string.w_err_http, e.code)
