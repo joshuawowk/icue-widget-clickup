@@ -13,6 +13,13 @@ internal object WidgetMath {
   /** Glyph width estimate as a fraction of the font size. */
   const val GLYPH_EM = 0.6f
 
+  /** Tag chip chrome in dp: horizontal padding 2×6 + trailing gap 4. */
+  const val TAG_CHROME_DP = 16f
+  /** Most tag chips shown on a row's second meta line; the rest collapse into "+N". */
+  const val MAX_TAG_CHIPS = 3
+  /** Tag names longer than this are ellipsized before measuring/drawing. */
+  const val MAX_TAG_CHARS = 14
+
   /** Responsive flags derived from the widget's current size. */
   data class Breakpoints(val narrow: Boolean, val short: Boolean)
 
@@ -28,6 +35,32 @@ internal object WidgetMath {
 
   /** Estimated rendered width of a filter chip in dp. */
   fun chipWidthDp(label: String, fontSp: Float): Float = label.length * fontSp * GLYPH_EM + CHIP_CHROME_DP
+
+  /** Display label for a tag chip. */
+  fun tagLabel(name: String): String = ellipsize(name, MAX_TAG_CHARS)
+
+  /** Estimated rendered width of a tag chip in dp. */
+  fun tagChipWidthDp(label: String, fontSp: Float): Float = label.length * fontSp * GLYPH_EM + TAG_CHROME_DP
+
+  /** Estimated rendered width of plain meta text (no chrome) in dp. */
+  fun textWidthDp(chars: Int, fontSp: Float): Float = chars * fontSp * GLYPH_EM
+
+  /**
+   * How many of the tag chips for [labels] (display labels, in order) fit one line of [availableDp]
+   * together with the trailing "+N" counter for the ones left out. Returns the count to show (0..[maxChips]).
+   */
+  fun fitTagChips(labels: List<String>, fontSp: Float, availableDp: Float, maxChips: Int = MAX_TAG_CHIPS): Int {
+    for (k in minOf(labels.size, maxChips) downTo 1) {
+      val chips = labels.take(k).sumOf { tagChipWidthDp(it, fontSp).toDouble() }.toFloat()
+      val plus = if (k < labels.size) textWidthDp("+${labels.size - k}".length, fontSp) else 0f
+      if (chips + plus <= availableDp) return k
+    }
+    return 0
+  }
+
+  /** Max characters of the list name so the line-1 siblings (due chip, priority) still fit [availableDp]. */
+  fun listNameChars(availableDp: Float, reservedDp: Float, fontSp: Float, minChars: Int = 6, maxChars: Int = 24): Int =
+    ((availableDp - reservedDp) / (fontSp * GLYPH_EM)).toInt().coerceIn(minChars, maxChars)
 
   /**
    * Greedy wrap of chips with estimated [widths] into rows no wider than [availableDp] (a chip
