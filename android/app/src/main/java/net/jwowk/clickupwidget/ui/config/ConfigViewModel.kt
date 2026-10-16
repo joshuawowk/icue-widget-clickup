@@ -184,6 +184,7 @@ class ConfigViewModel(app: Application, val appWidgetId: Int) : AndroidViewModel
       backgroundOpacity = d.backgroundOpacity, textScale = d.textScale, density = d.density,
       showSubtitle = d.showSubtitle, showCount = d.showCount, showListName = d.showListName,
       showDueChip = d.showDueChip, showPriorityStar = d.showPriorityStar,
+      showPriority = d.showPriority, showTags = d.showTags,
       backgroundImagePath = null, backgroundBlur = 0,
     )
   }

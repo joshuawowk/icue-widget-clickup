@@ -56,6 +56,9 @@ import net.jwowk.clickupwidget.data.TaskListView
 import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.TaskRow
 import net.jwowk.clickupwidget.data.model.LoadState
+import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskItem
+import net.jwowk.clickupwidget.style.Palettes
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.ui.Nav
 import java.io.File
@@ -79,6 +82,8 @@ private class Dims(config: WidgetConfig, widthDp: Float, heightDp: Float) {
   val showStar = config.showPriorityStar && !bp.narrow
   val showListName = config.showListName && !bp.narrow
   val showSubtitle = config.showSubtitle && !bp.short
+  /** Estimated width of a row's text column: content minus check circle (+ gap), star (+ gap) and slack. */
+  val textWidth = contentWidth - circle.value - 10f - (if (showStar) 6f + 16f * scale else 0f) - 4f
 }
 
 private fun GlanceModifier.clickIf(env: WidgetEnv, action: () -> Action): GlanceModifier =
@@ -215,7 +220,7 @@ private fun ColumnScope.Ready(state: WidgetState, config: WidgetConfig, colors: 
   val inFlight = state.ui.pendingCompletions + state.committing
   val toastShowing = toastText(state, now, context) != null
   LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-    if (barOpen) filterBar(view, colors, dims, env, context)
+    if (barOpen) filterBar(view, state.ui.refreshing, !headerLayout(config, dims).showRefresh, colors, dims, env, context)
     when {
       view.scopedTotal == 0 -> item(WidgetMath.stableId("__allclear")) { AllClear(colors, dims) }
       filterEmpty -> item(WidgetMath.stableId("__filterempty")) {
@@ -258,11 +263,10 @@ private fun Header(
   env: WidgetEnv,
 ) {
   val context = LocalContext.current
-  Row(
-    modifier = GlanceModifier.fillMaxWidth().clickIf(env) { actionRunCallback<ToggleFilterBarAction>() },
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Column(modifier = GlanceModifier.defaultWeight()) {
+  val hl = headerLayout(config, dims)
+  Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    // The title area toggles the filter bar; the right-hand controls have their own taps.
+    Column(modifier = GlanceModifier.defaultWeight().clickIf(env) { actionRunCallback<ToggleFilterBarAction>() }) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text(config.title.ifBlank { "My Tasks" }, style = style(colors.text, dims.title, bold = true), maxLines = 1)
         Spacer(GlanceModifier.width(4.dp))
@@ -285,12 +289,12 @@ private fun Header(
         if (sub.isNotEmpty()) Text(sub, style = style(colors.muted, dims.meta), maxLines = 1)
       }
     }
-    if (config.showCount) {
+    // Narrow widgets drop the count / "tasks" word / Refresh so the title keeps its room.
+    if (hl.showCount) {
       Spacer(GlanceModifier.width(8.dp))
       Row(verticalAlignment = Alignment.Bottom) {
         Text(view.total.toString(), style = style(colors.accent, dims.count, bold = true), maxLines = 1)
-        // Narrow widgets drop the "tasks" word so the title keeps its room.
-        if (!dims.bp.narrow) {
+        if (hl.showTasksWord) {
           Spacer(GlanceModifier.width(4.dp))
           Text(
             context.getString(if (view.total == 1) R.string.w_task_one else R.string.w_task_many),
@@ -300,6 +304,41 @@ private fun Header(
         }
       }
     }
+    Spacer(GlanceModifier.width(4.dp))
+    if (hl.showRefresh) {
+      HeaderButton(
+        R.drawable.ic_w_refresh, context.getString(R.string.w_cd_refresh),
+        if (state.ui.refreshing) colors.muted else colors.accent, hl.buttonDp, dims, env,
+        if (state.ui.refreshing) null else ({ actionRunCallback<RefreshAction>() }),
+      )
+    }
+    HeaderButton(R.drawable.ic_w_add, context.getString(R.string.w_cd_new_task), colors.accent, hl.buttonDp, dims, env) {
+      actionStartActivity(Nav.newTaskIntent(context, env.appWidgetId))
+    }
+  }
+}
+
+private fun headerLayout(config: WidgetConfig, dims: Dims) =
+  WidgetMath.headerLayout(dims.contentWidth, dims.scale, config.showCount, dims.bp.short || dims.bp.narrow)
+
+/** A square tap target ([sizeDp], 32 or 28) with a centered icon, for the header's Refresh and New-task buttons. */
+@Composable
+private fun HeaderButton(
+  @DrawableRes icon: Int,
+  description: String,
+  tint: ColorProvider,
+  sizeDp: Int,
+  dims: Dims,
+  env: WidgetEnv,
+  action: (() -> Action)?,
+) {
+  Box(modifier = GlanceModifier.size(sizeDp.dp).let { if (action != null) it.clickIf(env, action) else it }, contentAlignment = Alignment.Center) {
+    Image(
+      provider = ImageProvider(icon),
+      contentDescription = description,
+      modifier = GlanceModifier.size((18f * dims.scale).dp),
+      colorFilter = ColorFilter.tint(tint),
+    )
   }
 }
 
@@ -322,7 +361,15 @@ private class ChipSpec(val label: String, val argb: Long, val on: Boolean, val a
   val fadedColor: ColorProvider get() = ColorProvider(Color(argb).copy(alpha = 0.45f))
 }
 
-private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, dims: Dims, env: WidgetEnv, context: Context) {
+private fun LazyListScope.filterBar(
+  view: TaskListView,
+  refreshing: Boolean,
+  showRefreshPill: Boolean,
+  colors: WidgetColors,
+  dims: Dims,
+  env: WidgetEnv,
+  context: Context,
+) {
   fun section(key: String, label: String, chips: List<ChipSpec>) {
     if (chips.isEmpty()) return
     item(WidgetMath.stableId("__label_$key")) {
@@ -344,14 +391,19 @@ private fun LazyListScope.filterBar(view: TaskListView, colors: WidgetColors, di
   // Actions first: on small widgets the chip rows push anything below them out of view.
   item(WidgetMath.stableId("__actions")) {
     Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
-      ActionPill(R.drawable.ic_w_refresh, context.getString(R.string.w_refresh), colors, dims, env) {
-        actionRunCallback<RefreshAction>()
+      // The header drops its Refresh button when narrow; keep it reachable here.
+      if (showRefreshPill) {
+        ActionPill(
+          R.drawable.ic_w_refresh, context.getString(R.string.w_refresh),
+          colors, dims, env,
+          if (refreshing) null else ({ actionRunCallback<RefreshAction>() }),
+        )
       }
       ActionPill(R.drawable.ic_w_settings, context.getString(R.string.w_settings), colors, dims, env) {
         actionStartActivity(Nav.configIntent(context, env.appWidgetId))
       }
-      // Three pills need ~280dp; below that "Open ClickUp" would only show truncated.
-      if (dims.contentWidth >= 280f) {
+      // Both pills need ~210dp; below that "Open ClickUp" would only show truncated.
+      if (dims.contentWidth >= 210f) {
         ActionPill(R.drawable.ic_w_open, context.getString(R.string.w_open_clickup), colors, dims, env) {
           actionStartActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse("https://app.clickup.com")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -412,14 +464,14 @@ private fun ActionPill(
   colors: WidgetColors,
   dims: Dims,
   env: WidgetEnv,
-  action: () -> Action,
+  action: (() -> Action)?,
 ) {
   Box(GlanceModifier.padding(end = 6.dp)) {
     Row(
       modifier = GlanceModifier
         .background(ImageProvider(R.drawable.widget_chip_off), colorFilter = ColorFilter.tint(colors.accent))
         .padding(horizontal = 8.dp, vertical = 4.dp)
-        .clickIf(env, action),
+        .let { if (action != null) it.clickIf(env, action) else it },
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Icon(icon, colors.accent, (13f * dims.scale).dp)
@@ -472,10 +524,20 @@ private fun TaskRowView(
         )
         val listName = task.listName.takeIf { dims.showListName && it.isNotBlank() }
         val due = row.due.takeIf { config.showDueChip }
-        if (listName != null || due != null) {
+        val prio = task.priority.takeIf { config.showPriority && it != Priority.NONE }
+        if (listName != null || due != null || prio != null) {
+          // Width left for the list name once the due chip and priority (and their gaps) are reserved.
+          val icon = dims.meta * 0.95f
+          var reserved = 0f
+          if (due != null) reserved += 8f + icon + 3f + WidgetMath.textWidthDp(due.label.length, dims.meta)
+          if (prio != null) {
+            reserved += 8f + icon
+            if (!dims.bp.narrow) reserved += 3f + WidgetMath.textWidthDp(prio.label.length, dims.meta)
+          }
+          val nameChars = WidgetMath.listNameChars(dims.textWidth, reserved, dims.meta)
           Row(verticalAlignment = Alignment.CenterVertically) {
             if (listName != null) {
-              Text(WidgetMath.ellipsize(listName, 24), style = style(colors.muted, dims.meta), maxLines = 1)
+              Text(WidgetMath.ellipsize(listName, nameChars), style = style(colors.muted, dims.meta), maxLines = 1)
             }
             if (due != null) {
               if (listName != null) Spacer(GlanceModifier.width(8.dp))
@@ -485,12 +547,22 @@ private fun TaskRowView(
                 DueClass.SOON -> colors.soon
                 DueClass.LATER -> colors.muted
               }
-              Icon(R.drawable.ic_w_calendar, dueColor, (dims.meta * 0.95f).dp)
+              Icon(R.drawable.ic_w_calendar, dueColor, icon.dp)
               Spacer(GlanceModifier.width(3.dp))
               Text(due.label, style = style(dueColor, dims.meta, bold = true), maxLines = 1)
             }
+            if (prio != null) {
+              if (listName != null || due != null) Spacer(GlanceModifier.width(8.dp))
+              val prioColor = ColorProvider(Color(prio.chipColor))
+              Icon(R.drawable.ic_w_flag, prioColor, icon.dp)
+              if (!dims.bp.narrow) {
+                Spacer(GlanceModifier.width(3.dp))
+                Text(prio.label, style = style(prioColor, dims.meta, bold = true), maxLines = 1)
+              }
+            }
           }
         }
+        if (config.showTags && task.tags.isNotEmpty() && !dims.bp.narrow) TagLine(task, colors, dims)
       }
       if (dims.showStar) {
         Spacer(GlanceModifier.width(6.dp))
@@ -502,6 +574,31 @@ private fun TaskRowView(
       }
     }
     if (divider) Box(GlanceModifier.fillMaxWidth().height(1.dp).background(colors.rowDivider)) {}
+  }
+}
+
+/** Meta line 2: up to [WidgetMath.MAX_TAG_CHIPS] tag chips (solid tag color) that fit, then "+N" for the rest. */
+@Composable
+private fun TagLine(task: TaskItem, colors: WidgetColors, dims: Dims) {
+  val labels = task.tags.map { WidgetMath.tagLabel(it) }
+  val shown = WidgetMath.fitTagChips(labels, dims.chip, dims.textWidth)
+  Row(modifier = GlanceModifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    for (i in 0 until shown) {
+      // Solid tag color (as ClickUp shows tags) with black/white text by luminance: a translucent tint
+      // renders washed-out in RemoteViews, leaving light text on a pale chip.
+      val fill = TaskLogic.parseColor(task.tagColors[task.tags[i]], fallback = 0xFF6B7280)
+      val ink = ColorProvider(Color(if (Palettes.isDark(fill)) 0xFFFFFFFF else 0xFF111111))
+      Box(modifier = GlanceModifier.padding(end = 4.dp)) {
+        Box(
+          modifier = GlanceModifier
+            .background(ImageProvider(R.drawable.widget_pill), colorFilter = ColorFilter.tint(ColorProvider(Color(fill))))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+        ) {
+          Text(labels[i], style = style(ink, dims.chip, bold = true), maxLines = 1)
+        }
+      }
+    }
+    if (shown < labels.size) Text("+${labels.size - shown}", style = style(colors.muted, dims.chip, bold = true), maxLines = 1)
   }
 }
 

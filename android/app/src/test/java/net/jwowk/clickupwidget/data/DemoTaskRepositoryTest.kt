@@ -2,6 +2,7 @@ package net.jwowk.clickupwidget.data
 
 import kotlinx.coroutines.test.runTest
 import net.jwowk.clickupwidget.data.model.DueFilter
+import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import org.junit.Assert.assertEquals
@@ -80,5 +81,66 @@ class DemoTaskRepositoryTest {
     val info = DemoTaskRepository(now).verifyToken("pk_anything")
     assertEquals(1, info.workspaces.size)
     assertEquals(DemoTaskRepository.SAMPLE_WORKSPACE_NAME, info.workspaces.first().name)
+  }
+
+  @Test
+  fun setPriority_updatesTaskAndColor() = runTest {
+    val repo = DemoTaskRepository(now)
+    repo.setPriority("demo-3", Priority.URGENT)
+    val urgent = repo.fetchTasks(WidgetConfig()).tasks.first { it.id == "demo-3" }
+    assertEquals(Priority.URGENT, urgent.priority)
+    assertEquals("#f50000", urgent.priorityColorHex)
+    repo.setPriority("demo-3", Priority.NONE)
+    val none = repo.fetchTasks(WidgetConfig()).tasks.first { it.id == "demo-3" }
+    assertEquals(Priority.NONE, none.priority)
+    assertEquals(null, none.priorityColorHex)
+    repo.setPriority("demo-1-s2", Priority.LOW)
+    assertEquals(Priority.LOW, repo.taskDetail(urgent.copy(id = "demo-1")).subtasks.first { it.id == "demo-1-s2" }.priority)
+  }
+
+  @Test
+  fun createTask_appearsInMyTasksWhenAssignedToMe() = runTest {
+    val repo = DemoTaskRepository(now)
+    val before = repo.fetchTasks(WidgetConfig()).tasks.size
+    val created = repo.createTask(NewTask(listId = "demo-list-marketing", name = " Book venue ", priority = Priority.HIGH, dueMs = now))
+    assertEquals("Book venue", created.name)
+    assertEquals("Marketing", created.listName)
+    assertEquals(Priority.HIGH, created.priority)
+    assertEquals("#ffcc00", created.priorityColorHex)
+    assertEquals(before + 1, repo.fetchTasks(WidgetConfig()).tasks.size)
+    assertTrue(repo.fetchTasks(WidgetConfig(listId = "demo-list-marketing")).tasks.any { it.id == created.id })
+    val second = repo.createTask(NewTask(listId = "demo-list-marketing", name = "Another"))
+    assertTrue(second.id != created.id)
+  }
+
+  @Test
+  fun createTask_notAssignedToMeOnlyShowsInListMode() = runTest {
+    val repo = DemoTaskRepository(now)
+    val created = repo.createTask(NewTask(listId = "demo-list-operations", name = "Someone else's", assignToMe = false))
+    assertFalse(repo.fetchTasks(WidgetConfig()).tasks.any { it.id == created.id })
+    assertTrue(repo.fetchTasks(WidgetConfig(listId = "demo-list-operations")).tasks.any { it.id == created.id })
+  }
+
+  @Test
+  fun createTask_blankNameRejected() = runTest {
+    try {
+      DemoTaskRepository(now).createTask(NewTask(listId = "demo-list-operations", name = " "))
+      org.junit.Assert.fail("expected exception")
+    } catch (_: IllegalArgumentException) {
+    }
+  }
+
+  @Test
+  fun demoTasks_haveTagColorsAndPopulatedFields() = runTest {
+    val repo = DemoTaskRepository(now)
+    val tasks = DemoTaskRepository.sampleTasks(now)
+    val tagged = tasks.filter { it.tags.isNotEmpty() }
+    assertTrue(tagged.size >= 3)
+    assertTrue(tagged.all { t -> t.tags.all { it in t.tagColors } })
+    val detail = repo.taskDetail(tasks.first { it.id == "demo-1" })
+    assertTrue(detail.fields.any { it.name == "Requester" && it.colorHex != null })
+    assertTrue(detail.fields.any { it.name == "Incident No." })
+    assertTrue(repo.taskDetail(tasks.first { it.id == "demo-8" }).fields.isEmpty())
+    assertTrue(tasks.count { t -> repo.taskDetail(t).fields.isNotEmpty() } in 2..4)
   }
 }

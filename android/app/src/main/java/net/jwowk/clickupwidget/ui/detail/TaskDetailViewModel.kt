@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 import net.jwowk.clickupwidget.Graph
 import net.jwowk.clickupwidget.R
 import net.jwowk.clickupwidget.data.TaskLogic
+import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
@@ -54,6 +56,8 @@ internal data class DetailUiState(
   val detailLoaded: Boolean = false,
   val detailFailed: Boolean = false,
   val description: String = "",
+  /** Populated standard + custom fields (read-only), in display order. */
+  val fields: List<TaskField> = emptyList(),
   /** Direct subtasks in [TaskLogic.sortSubtasks] order. */
   val subtasks: List<TaskItem> = emptyList(),
   /** null while loading. */
@@ -61,6 +65,12 @@ internal data class DetailUiState(
   val statusesFailed: Boolean = false,
   /** Name of the status being saved; non-null disables every pill. */
   val savingStatus: String? = null,
+  /** Priority being saved; non-null disables every priority pill. */
+  val savingPriority: Priority? = null,
+  /** A priority change was saved this session: a stale detail response must not overwrite it. */
+  val priorityTouched: Boolean = false,
+  /** A status change was saved this session: a stale detail response must not overwrite it. */
+  val statusTouched: Boolean = false,
   /** Task ids (subtasks or the task itself) in the "completing" undo window or in flight. */
   val pending: Set<String> = emptySet(),
   /** Subtasks confirmed completed but not yet reflected by a reload. */
@@ -72,6 +82,8 @@ internal data class DetailUiState(
   val closeRequested: Boolean = false,
 ) {
   val statusBusy: Boolean get() = savingStatus != null
+
+  val priorityBusy: Boolean get() = savingPriority != null
 
   /** Done for display: committed or still in the undo window (struck through, circle checked). */
   fun isSubtaskDone(sub: TaskItem): Boolean = isSubtaskCommittedDone(sub) || sub.id in pending
@@ -157,7 +169,14 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
             detailLoading = false,
             detailLoaded = true,
             detailFailed = false,
+            task = DetailFormat.mergeFreshTask(
+              it.task,
+              d.task,
+              keepPriority = it.priorityBusy || it.priorityTouched,
+              keepStatus = it.statusBusy || it.statusTouched,
+            ),
             description = d.description,
+            fields = d.fields,
             subtasks = TaskLogic.sortSubtasks(d.subtasks, it.nowMs),
             doneIds = emptySet(),
           )
@@ -201,6 +220,7 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
           it.copy(
             task = it.task.copy(status = status.name, statusColorHex = status.colorHex, statusType = status.type),
             savingStatus = null,
+            statusTouched = true,
           )
         }
         snack(s, str(R.string.detail_status_changed, status.name.uppercase()), durationMs = 2200)
@@ -209,6 +229,38 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
       } catch (e: Exception) {
         update(s) { it.copy(savingStatus = null) }
         snack(s, str(R.string.detail_status_failed))
+      } finally {
+        refreshWidget(cur.appWidgetId)
+      }
+    }
+  }
+
+  /** Tap on a priority pill: optimistic, reverted with an error snackbar when the request fails. */
+  fun setPriority(priority: Priority) {
+    val s = session
+    val cur = _state.value ?: return
+    if (cur.priorityBusy || DetailFormat.isCurrentPriority(priority, cur.task.priority)) return
+    val before = cur.task
+    update(s) {
+      it.copy(task = it.task.copy(priority = priority, priorityColorHex = null), savingPriority = priority)
+    }
+    DetailWork.scope.launch {
+      try {
+        Graph.repository().setPriority(before.id, priority)
+        update(s) { it.copy(savingPriority = null, priorityTouched = true) }
+        val text = if (priority == Priority.NONE) str(R.string.detail_priority_cleared)
+        else str(R.string.detail_priority_changed, priority.label)
+        snack(s, text, durationMs = 2200)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        update(s) {
+          it.copy(
+            task = it.task.copy(priority = before.priority, priorityColorHex = before.priorityColorHex),
+            savingPriority = null,
+          )
+        }
+        snack(s, str(R.string.detail_priority_failed))
       } finally {
         refreshWidget(cur.appWidgetId)
       }

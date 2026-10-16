@@ -9,6 +9,7 @@ import net.jwowk.clickupwidget.MainActivity
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.ui.config.ConfigActivity
 import net.jwowk.clickupwidget.ui.detail.TaskDetailActivity
+import net.jwowk.clickupwidget.ui.newtask.NewTaskActivity
 
 /** Intent contracts between the widget and the app screens. */
 object Nav {
@@ -32,6 +33,13 @@ object Nav {
     intent.getStringExtra(EXTRA_TASK_JSON)?.let {
       runCatching { json.decodeFromString(TaskItem.serializer(), it) }.getOrNull()
     }
+
+  /** "New task" sheet from widget [appWidgetId] (list mode: that list; My Tasks: pick a list). */
+  fun newTaskIntent(context: Context, appWidgetId: Int): Intent =
+    Intent(context, NewTaskActivity::class.java)
+      .setData(Uri.parse("clickupwidget://newtask/$appWidgetId"))
+      .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
   /** Settings for one placed widget (also used outside the launcher's configure flow). */
   fun configIntent(context: Context, appWidgetId: Int): Intent =

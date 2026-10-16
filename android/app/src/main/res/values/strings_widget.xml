@@ -29,6 +29,8 @@
     <string name="w_err_access">No access to this list — check widget settings</string>
     <string name="w_err_network">Network error — retrying on next refresh</string>
     <string name="w_err_http">ClickUp error (HTTP %1$d)</string>
+    <string name="w_cd_refresh">Refresh tasks</string>
+    <string name="w_cd_new_task">New task</string>
     <string name="w_cd_complete">Complete task</string>
     <string name="w_cd_completing">Undo complete</string>
 </resources>

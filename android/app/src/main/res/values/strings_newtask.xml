@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="newtask_title">New task</string>
+    <string name="newtask_close">Close</string>
+    <string name="newtask_name">Task name</string>
+    <string name="newtask_list">List</string>
+    <string name="newtask_list_none">No list chosen</string>
+    <string name="newtask_list_change">Change</string>
+    <string name="newtask_list_choose">Choose…</string>
+    <string name="newtask_due">Due date</string>
+    <string name="newtask_due_none">None</string>
+    <string name="newtask_due_today">Today</string>
+    <string name="newtask_due_tomorrow">Tomorrow</string>
+    <string name="newtask_due_pick">Pick…</string>
+    <string name="newtask_date_ok">OK</string>
+    <string name="newtask_priority">Priority</string>
+    <string name="newtask_description">Description (optional)</string>
+    <string name="newtask_assign_me">Assign to me</string>
+    <string name="newtask_unassigned_note">Unassigned tasks won\'t appear in My Tasks.</string>
+    <string name="newtask_create">Create task</string>
+    <string name="newtask_creating">Creating…</string>
+    <string name="newtask_created">Task created</string>
+    <string name="newtask_created_hidden">Task created — hidden by this widget\'s status filter</string>
+    <string name="newtask_status">Status</string>
+    <string name="newtask_status_loading">Loading statuses…</string>
+    <string name="newtask_status_failed">Couldn\'t load this list\'s statuses — the list\'s default will be used</string>
+    <string name="newtask_status_default">The list\'s default status will be used</string>
+    <string name="newtask_status_hidden">This widget\'s status filter hides this status, so the task won\'t show here</string>
+    <string name="newtask_error_list">List not found or no access — pick another list</string>
+    <string name="newtask_error_token">Invalid or missing token. Reconnect your ClickUp account in the app.</string>
+</resources>

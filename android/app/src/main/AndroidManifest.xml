@@ -51,6 +51,16 @@
             android:taskAffinity="net.jwowk.clickupwidget.detail"
             android:theme="@style/Theme.ClickUpTasks.Sheet" />
 
+        <!-- "New task" sheet, opened from the widget header's + button. -->
+        <activity
+            android:name=".ui.newtask.NewTaskActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="net.jwowk.clickupwidget.newtask"
+            android:theme="@style/Theme.ClickUpTasks.Sheet"
+            android:windowSoftInputMode="adjustResize" />
+
         <receiver
             android:name=".widget.TasksWidgetReceiver"
             android:exported="true"

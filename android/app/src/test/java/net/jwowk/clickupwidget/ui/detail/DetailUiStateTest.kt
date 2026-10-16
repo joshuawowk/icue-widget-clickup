@@ -1,9 +1,12 @@
 package net.jwowk.clickupwidget.ui.detail
 
+import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DetailUiStateTest {
@@ -35,5 +38,10 @@ class DetailUiStateTest {
     assertEquals(2L, s.snack?.key)
     assertEquals(2L, s.clearUndoSnack("x").snack?.key)
     assertNull(s.clearUndoSnack("y").snack)
+  }
+
+  @Test fun priorityBusyOnlyWhileSaving() {
+    assertFalse(state().priorityBusy)
+    assertTrue(state().copy(savingPriority = Priority.HIGH).priorityBusy)
   }
 }

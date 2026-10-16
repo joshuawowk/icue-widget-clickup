@@ -39,6 +39,7 @@ class TaskDetailActivity : ComponentActivity() {
           state = current,
           onDismiss = ::finish,
           onSetStatus = viewModel::setStatus,
+          onSetPriority = viewModel::setPriority,
           onCompleteSubtask = viewModel::completeSubtask,
           onCompleteTask = viewModel::completeTask,
           onUndo = viewModel::undo,

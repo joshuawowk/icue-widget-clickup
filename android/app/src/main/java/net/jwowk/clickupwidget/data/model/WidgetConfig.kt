@@ -81,6 +81,10 @@ data class WidgetConfig(
   val showListName: Boolean = true,
   val showDueChip: Boolean = true,
   val showPriorityStar: Boolean = true,
+  /** Priority flag + name in each row's meta line. */
+  val showPriority: Boolean = true,
+  /** Tag chips in each row's meta line. */
+  val showTags: Boolean = true,
   /** Optional processed (downscaled, pre-blurred) background image in app-private storage. */
   val backgroundImagePath: String? = null,
   /** 0..25 blur radius that was applied to [backgroundImagePath] (informational / for re-processing). */
@@ -103,6 +107,11 @@ data class AppSettings(
   val undoSeconds: Int = 4,
   /** Use built-in sample tasks instead of ClickUp (no token needed). */
   val demoMode: Boolean = false,
+  /** List last used by "New task" in My Tasks mode (prefilled next time). */
+  val lastNewTaskListId: String = "",
+  val lastNewTaskListName: String = "",
+  /** Where [lastNewTaskListId] is valid: "demo", or the workspace id it belongs to. Ignored on mismatch. */
+  val lastNewTaskScope: String = "",
 ) {
   companion object {
     val REFRESH_CHOICES = listOf(15, 30, 60, 120)

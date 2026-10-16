@@ -73,6 +73,7 @@
     <string name="ui_priority_default">Priority (default)</string>
     <string name="ui_default_statuses">Default statuses</string>
     <string name="ui_default_statuses_hint">e.g. In-Progress, Review — blank = all</string>
+    <string name="ui_default_statuses_help">Which Status filter chips start selected when the widget loads or after you save. Comma-separated, e.g. In-Progress, Review — case, spaces and dashes are ignored. Blank, or no match, shows all statuses.</string>
     <string name="ui_max_tasks">Max tasks</string>
 
     <!-- Style section -->
@@ -93,6 +94,8 @@
     <string name="ui_show_list_name">Show list name</string>
     <string name="ui_show_due_chip">Show due date chip</string>
     <string name="ui_show_priority_star">Show priority star</string>
+    <string name="ui_show_priority">Show priority</string>
+    <string name="ui_show_tags">Show tags</string>
     <string name="ui_bg_image">Background image</string>
     <string name="ui_pick_image">Choose image</string>
     <string name="ui_replace_image">Replace image</string>
