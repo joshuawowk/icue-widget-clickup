@@ -1,20 +1,127 @@
 package net.jwowk.clickupwidget.data
 
 import android.content.Context
-
-// STUB — owned by the data-layer agent. Keep the public API exactly as declared.
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Stores the ClickUp personal API token (one per app, shared by all widgets) encrypted at rest
  * with an Android Keystore AES/GCM key, in app-private SharedPreferences. Never backed up
  * (manifest allowBackup=false). Also remembers a display label for the connected account.
+ *
+ * Thread-safe; the decrypted token is cached in memory so [token] is cheap after the first call.
  */
 class TokenStore(context: Context) {
-  fun token(): String? = TODO()
-  fun hasToken(): Boolean = TODO()
-  fun save(token: String): Unit = TODO()
-  fun clear(): Unit = TODO()
+  private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+  private val lock = Any()
+  private var cached: String? = null
+  private var cacheLoaded = false
+
+  /** The decrypted token, or null if none is stored (or the Keystore key was invalidated, which clears it). */
+  fun token(): String? = synchronized(lock) {
+    if (!cacheLoaded) {
+      cached = readToken()
+      cacheLoaded = true
+    }
+    cached
+  }
+
+  fun hasToken(): Boolean = token() != null
+
+  fun save(token: String): Unit = synchronized(lock) {
+    val blob = try {
+      encrypt(token)
+    } catch (e: Exception) {
+      // A broken/invalidated key: start over with a fresh one.
+      deleteKey()
+      encrypt(token)
+    }
+    prefs.edit().putString(KEY_TOKEN, blob).apply()
+    cached = token
+    cacheLoaded = true
+  }
+
+  fun clear(): Unit = synchronized(lock) {
+    prefs.edit().remove(KEY_TOKEN).remove(KEY_LABEL).apply()
+    cached = null
+    cacheLoaded = true
+  }
+
   /** e.g. "Josh · Getinge" — shown in the app; null if unknown. */
-  fun accountLabel(): String? = TODO()
-  fun saveAccountLabel(label: String?): Unit = TODO()
+  fun accountLabel(): String? = prefs.getString(KEY_LABEL, null)
+
+  fun saveAccountLabel(label: String?) {
+    prefs.edit().apply { if (label == null) remove(KEY_LABEL) else putString(KEY_LABEL, label) }.apply()
+  }
+
+  private fun readToken(): String? {
+    val blob = prefs.getString(KEY_TOKEN, null) ?: return null
+    return try {
+      decrypt(blob)
+    } catch (e: Exception) {
+      prefs.edit().remove(KEY_TOKEN).remove(KEY_LABEL).apply()
+      deleteKey()
+      null
+    }
+  }
+
+  private fun encrypt(plain: String): String {
+    val cipher = Cipher.getInstance(TRANSFORMATION)
+    cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+    val ct = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
+    return Base64.encodeToString(cipher.iv + ct, Base64.NO_WRAP)
+  }
+
+  private fun decrypt(blob: String): String {
+    val bytes = Base64.decode(blob, Base64.NO_WRAP)
+    require(bytes.size > IV_BYTES) { "Token blob too short" }
+    val cipher = Cipher.getInstance(TRANSFORMATION)
+    cipher.init(
+      Cipher.DECRYPT_MODE,
+      getOrCreateKey(),
+      GCMParameterSpec(TAG_BITS, bytes, 0, IV_BYTES),
+    )
+    return String(cipher.doFinal(bytes, IV_BYTES, bytes.size - IV_BYTES), Charsets.UTF_8)
+  }
+
+  private fun keyStore(): KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+
+  private fun getOrCreateKey(): SecretKey {
+    (keyStore().getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+    val spec = KeyGenParameterSpec.Builder(
+      KEY_ALIAS,
+      KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+    )
+      .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+      .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+      .setKeySize(256)
+      .build()
+    return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+      .apply { init(spec) }
+      .generateKey()
+  }
+
+  private fun deleteKey() {
+    try {
+      keyStore().deleteEntry(KEY_ALIAS)
+    } catch (_: Exception) {
+    }
+  }
+
+  private companion object {
+    const val PREFS = "secure_prefs"
+    const val KEY_TOKEN = "token"
+    const val KEY_LABEL = "account_label"
+    const val KEY_ALIAS = "clickup_token_key"
+    const val ANDROID_KEYSTORE = "AndroidKeyStore"
+    const val TRANSFORMATION = "AES/GCM/NoPadding"
+    const val IV_BYTES = 12
+    const val TAG_BITS = 128
+  }
 }
