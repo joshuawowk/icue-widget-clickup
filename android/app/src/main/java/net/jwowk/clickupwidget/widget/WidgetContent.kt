@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
 import androidx.annotation.DrawableRes
@@ -113,7 +115,9 @@ internal fun WidgetRoot(state: WidgetState, env: WidgetEnv) {
   } else {
     GlanceModifier.cornerRadius(16.dp)
   }
-  val bitmap = config.backgroundImagePath?.let { BackgroundImages.load(it) }
+  // iCUE stacks the image over the background color and fades the whole stack with the transparency
+  // setting; an opaque image hides the color, so draw just the image with the opacity baked in.
+  val bitmap = config.backgroundImagePath?.let { BackgroundImages.load(it, config.backgroundOpacity) }
   Box(modifier = GlanceModifier.fillMaxSize().appWidgetBackground().then(corner)) {
     if (bitmap != null) {
       Image(
@@ -123,7 +127,8 @@ internal fun WidgetRoot(state: WidgetState, env: WidgetEnv) {
         contentScale = ContentScale.Crop,
       )
     }
-    Column(modifier = GlanceModifier.fillMaxSize().background(colors.background).padding(dims.pad)) {
+    val content = GlanceModifier.fillMaxSize().let { if (bitmap == null) it.background(colors.background) else it }
+    Column(modifier = content.padding(dims.pad)) {
       when (state.snapshot.loadState) {
         LoadState.LOADING -> Loading(colors, dims)
         LoadState.SETUP -> Setup(colors, dims, env)
@@ -538,17 +543,17 @@ private fun ToastBar(state: WidgetState, colors: WidgetColors, dims: Dims, env: 
   }
 }
 
-/** Decodes the configured background image once per path + mtime (≤ ~720 px long edge). */
+/** Decodes the configured background image once per path + mtime + opacity (≤ ~720 px long edge). */
 private object BackgroundImages {
   private const val MAX_EDGE = 720
   private var key: String? = null
   private var cached: Bitmap? = null
 
   @Synchronized
-  fun load(path: String): Bitmap? {
+  fun load(path: String, opacityPercent: Int): Bitmap? {
     val file = File(path)
     if (!file.isFile) return null
-    val k = "$path@${file.lastModified()}"
+    val k = "$path@${file.lastModified()}@$opacityPercent"
     if (k == key) return cached
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(path, bounds)
@@ -557,9 +562,19 @@ private object BackgroundImages {
         path,
         BitmapFactory.Options().apply { inSampleSize = WidgetMath.sampleSize(bounds.outWidth, bounds.outHeight, MAX_EDGE) },
       )
-    }.getOrNull()
+    }.getOrNull()?.let { withOpacity(it, opacityPercent) }
     key = k
     cached = bitmap
     return bitmap
+  }
+
+  /** RemoteViews images have no alpha attribute, so the opacity is baked into a copy. */
+  private fun withOpacity(src: Bitmap, opacityPercent: Int): Bitmap {
+    val alpha = (opacityPercent.coerceIn(0, 100) * 255 + 50) / 100
+    if (alpha >= 255) return src
+    val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+    Canvas(out).drawBitmap(src, 0f, 0f, Paint().apply { this.alpha = alpha })
+    src.recycle()
+    return out
   }
 }
