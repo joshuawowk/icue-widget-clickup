@@ -1,9 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- STUB — owned by the widget agent. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="180dp"
+    android:minWidth="110dp"
     android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="80dp"
+    android:maxResizeWidth="1200dp"
+    android:maxResizeHeight="1200dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
     android:resizeMode="horizontal|vertical"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:configure="net.jwowk.clickupwidget.ui.config.ConfigActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
+    android:previewImage="@drawable/widget_preview"
     android:description="@string/widget_description"
-    android:widgetCategory="home_screen" />
+    android:initialLayout="@layout/glance_default_loading_layout" />
