@@ -15,7 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.lifecycle.viewmodel.initializer
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.jwowk.clickupwidget.Graph
 import net.jwowk.clickupwidget.theme.ClickUpTasksTheme
 import net.jwowk.clickupwidget.widget.TasksWidgetReceiver
@@ -64,16 +66,19 @@ class ConfigActivity : ComponentActivity() {
     saving = true
     lifecycleScope.launch {
       try {
-        val config = vm.commit() ?: return@launch
-        Graph.configStore.saveWidgetConfig(appWidgetId, config)
-        // Set before the (slower) widget refresh so the launcher keeps the widget even if we are cut short.
-        setResult(RESULT_OK, resultIntent())
-        runCatching {
-          WidgetUpdater.resetFilters(this@ConfigActivity, appWidgetId)
-          WidgetUpdater.rerender(this@ConfigActivity, appWidgetId)
-          WidgetUpdater.refreshNow(this@ConfigActivity, appWidgetId)
-          WidgetUpdater.schedulePeriodic(this@ConfigActivity)
-        }.onFailure { Log.w(TAG, "Widget update after save failed", it) }
+        // Not cancellable: a half-finished save could leave a renamed image without a saved config.
+        withContext(NonCancellable) {
+          val config = vm.commit() ?: return@withContext
+          Graph.configStore.saveWidgetConfig(appWidgetId, config)
+          // Set before the (slower) widget refresh so the launcher keeps the widget even if we are cut short.
+          setResult(RESULT_OK, resultIntent())
+          runCatching {
+            WidgetUpdater.resetFilters(this@ConfigActivity, appWidgetId)
+            WidgetUpdater.rerender(this@ConfigActivity, appWidgetId)
+            WidgetUpdater.refreshNow(this@ConfigActivity, appWidgetId)
+            WidgetUpdater.schedulePeriodic(this@ConfigActivity)
+          }.onFailure { Log.w(TAG, "Widget update after save failed", it) }
+        }
         finish()
       } finally {
         saving = false
