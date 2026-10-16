@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ClickUpTasks" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Translucent, floats over the home screen (task detail opened from the widget). -->
+    <style name="Theme.ClickUpTasks.Sheet" parent="Theme.ClickUpTasks">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+</resources>
