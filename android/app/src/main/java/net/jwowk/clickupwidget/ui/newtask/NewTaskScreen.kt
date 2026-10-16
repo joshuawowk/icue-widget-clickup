@@ -240,6 +240,7 @@ private val PRIORITY_ORDER = listOf(Priority.NONE, Priority.URGENT, Priority.HIG
 
 private fun errorRes(e: NewTaskError): Int = when (e) {
   NewTaskError.INVALID_TOKEN -> R.string.newtask_error_token
+  NewTaskError.LIST_NOT_FOUND -> R.string.newtask_error_list
   NewTaskError.NETWORK -> R.string.ui_error_network
   NewTaskError.SERVER -> R.string.ui_error_server
   NewTaskError.UNKNOWN -> R.string.ui_error_unknown

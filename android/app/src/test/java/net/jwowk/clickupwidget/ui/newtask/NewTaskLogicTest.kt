@@ -78,21 +78,36 @@ class NewTaskLogicTest {
   @Test
   fun initialListFollowsMode() {
     val listMode = WidgetConfig(listId = "42", listName = "Sprint")
-    val settings = AppSettings(lastNewTaskListId = "7", lastNewTaskListName = "Inbox")
-    assertEquals("42", NewTaskLogic.initialList(listMode, settings)?.id)
-    assertEquals("Sprint", NewTaskLogic.initialList(listMode, settings)?.name)
+    val settings = AppSettings(lastNewTaskListId = "7", lastNewTaskListName = "Inbox", lastNewTaskScope = "ws1")
+    assertEquals("42", NewTaskLogic.initialList(listMode, settings, "ws1")?.id)
+    assertEquals("Sprint", NewTaskLogic.initialList(listMode, settings, "ws1")?.name)
     // Unnamed list falls back to its id.
-    assertEquals("42", NewTaskLogic.initialList(WidgetConfig(listId = "42"), settings)?.name)
+    assertEquals("42", NewTaskLogic.initialList(WidgetConfig(listId = "42"), settings, "ws1")?.name)
 
-    assertEquals("7", NewTaskLogic.initialList(WidgetConfig(), settings)?.id)
-    assertEquals("Inbox", NewTaskLogic.initialList(WidgetConfig(), settings)?.name)
-    assertNull(NewTaskLogic.initialList(WidgetConfig(), AppSettings()))
+    assertEquals("7", NewTaskLogic.initialList(WidgetConfig(), settings, "ws1")?.id)
+    assertEquals("Inbox", NewTaskLogic.initialList(WidgetConfig(), settings, "ws1")?.name)
+    assertNull(NewTaskLogic.initialList(WidgetConfig(), AppSettings(), "ws1"))
+  }
+
+  @Test
+  fun rememberedListIgnoredOutsideItsScope() {
+    val settings = AppSettings(lastNewTaskListId = "7", lastNewTaskListName = "Inbox", lastNewTaskScope = "ws1")
+    assertNull(NewTaskLogic.initialList(WidgetConfig(), settings, "ws2"))
+    assertNull(NewTaskLogic.initialList(WidgetConfig(), settings, "demo"))
+    assertNull(NewTaskLogic.initialList(WidgetConfig(), settings, null))
+    // Legacy value without a scope never matches.
+    assertNull(NewTaskLogic.initialList(WidgetConfig(), settings.copy(lastNewTaskScope = ""), "ws1"))
+    assertEquals("7", NewTaskLogic.initialList(WidgetConfig(), settings.copy(lastNewTaskScope = "demo"), "demo")?.id)
+    // List mode is unaffected by scope.
+    assertEquals("42", NewTaskLogic.initialList(WidgetConfig(listId = "42"), settings, "ws2")?.id)
   }
 
   @Test
   fun errorsMapToInlineKinds() {
     assertEquals(NewTaskError.INVALID_TOKEN, NewTaskLogic.errorFor(ClickUpApiException(401)))
     assertEquals(NewTaskError.INVALID_TOKEN, NewTaskLogic.errorFor(NoTokenException()))
+    assertEquals(NewTaskError.LIST_NOT_FOUND, NewTaskLogic.errorFor(ClickUpApiException(404)))
+    assertEquals(NewTaskError.LIST_NOT_FOUND, NewTaskLogic.errorFor(ClickUpApiException(403)))
     assertEquals(NewTaskError.SERVER, NewTaskLogic.errorFor(ClickUpApiException(500)))
     assertEquals(NewTaskError.NETWORK, NewTaskLogic.errorFor(IOException("offline")))
     assertEquals(NewTaskError.UNKNOWN, NewTaskLogic.errorFor(IllegalStateException()))

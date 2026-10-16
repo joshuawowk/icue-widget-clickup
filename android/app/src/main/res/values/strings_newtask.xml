@@ -20,5 +20,6 @@
     <string name="newtask_create">Create task</string>
     <string name="newtask_creating">Creating…</string>
     <string name="newtask_created">Task created</string>
+    <string name="newtask_error_list">List not found or no access — pick another list</string>
     <string name="newtask_error_token">Invalid or missing token. Reconnect your ClickUp account in the app.</string>
 </resources>

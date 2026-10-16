@@ -69,6 +69,8 @@ internal data class DetailUiState(
   val savingPriority: Priority? = null,
   /** A priority change was saved this session: a stale detail response must not overwrite it. */
   val priorityTouched: Boolean = false,
+  /** A status change was saved this session: a stale detail response must not overwrite it. */
+  val statusTouched: Boolean = false,
   /** Task ids (subtasks or the task itself) in the "completing" undo window or in flight. */
   val pending: Set<String> = emptySet(),
   /** Subtasks confirmed completed but not yet reflected by a reload. */
@@ -171,7 +173,7 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
               it.task,
               d.task,
               keepPriority = it.priorityBusy || it.priorityTouched,
-              keepStatus = it.statusBusy,
+              keepStatus = it.statusBusy || it.statusTouched,
             ),
             description = d.description,
             fields = d.fields,
@@ -218,6 +220,7 @@ internal class TaskDetailViewModel(app: Application) : AndroidViewModel(app) {
           it.copy(
             task = it.task.copy(status = status.name, statusColorHex = status.colorHex, statusType = status.type),
             savingStatus = null,
+            statusTouched = true,
           )
         }
         snack(s, str(R.string.detail_status_changed, status.name.uppercase()), durationMs = 2200)
