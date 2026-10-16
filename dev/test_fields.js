@@ -29,7 +29,7 @@ const want = [
   'Assignees=Josh, Ann', 'Start date=Thu, Oct 15, 2026', 'Time estimate=1h 30m', 'Sprint points=3', 'Created=Thu, Oct 15, 2026 by Josh',
   'drop_down-f=Ariana Carlone@#9b59b6', 'drop_down-f=Becky@#800000', 'date-f=Thu, Oct 15, 2026', 'short_text-f=INC2383904', 'number-f=9',
   'currency-f=USD 12.5', 'text-f=Good day,\n\nthere', 'checkbox-f=Yes', 'labels-f=One, Two', 'users-f=A, B', 'tasks-f=T1', 'emoji-f=★★★☆☆',
-  'automatic_progress-f=33%', 'manual_progress-f=50%', 'location-f=1 Main St', 'formula-f=42', 'attachment-f=2 file(s)', 'weird-f=plain',
+  'automatic_progress-f=33%', 'manual_progress-f=50%', 'location-f=1 Main St', 'formula-f=42', 'attachment-f=2 files', 'weird-f=plain',
 ];
 let bad = 0;
 want.forEach((w, i) => { if (got[i] !== w) { bad++; console.log('MISMATCH', i, JSON.stringify(got[i]), 'want', JSON.stringify(w)); } });

@@ -1021,7 +1021,7 @@
         case 'tasks': return joinNames(v, t => t && t.name);
         case 'emoji': {
           const n = Math.floor(Number(v));
-          if (!Number.isFinite(n) || n < 0) return null;
+          if (!Number.isFinite(n) || n <= 0) return null;   // an unrated field counts as empty
           const total = Math.max(n, Math.floor(Number(cfg.count)) || 0);
           return '★'.repeat(n) + '☆'.repeat(total - n);
         }
@@ -1032,7 +1032,7 @@
         }
         case 'location': return (v && v.formatted_address) ? String(v.formatted_address) : null;
         case 'formula': return String(v);
-        case 'attachment': return Array.isArray(v) ? v.length + ' file(s)' : null;
+        case 'attachment': return (Array.isArray(v) && v.length) ? (v.length === 1 ? '1 file' : v.length + ' files') : null;
         default: {
           if (typeof v === 'object') return null;
           const s = String(v).trim();
