@@ -112,23 +112,45 @@ class ClickUpApi(
 
   private suspend fun fetchTasksUnchecked(config: WidgetConfig): TaskFetch {
     if (config.isListMode) {
-      val tasks = getJson(path("list", config.listId, "task") {
-        addQueryParameter("include_closed", "false")
-        addQueryParameter("subtasks", "false")
-      }).array("tasks").mapNotNull { shapeTask(it) }
+      val tasks = allPages { page ->
+        path("list", config.listId, "task") {
+          addQueryParameter("include_closed", "false")
+          addQueryParameter("subtasks", "false")
+          addQueryParameter("page", page.toString())
+        }
+      }
       val statuses = bestEffort { listStatuses(config.listId) }.orEmpty()
       val teams = bestEffort { identity().teams }.orEmpty()
       return TaskFetch(tasks, workspaceName(teams, config.workspaceId).orEmpty(), statuses)
     }
     val id = identity()
     val workspaceId = config.workspaceId ?: id.teams.firstOrNull()?.id ?: throw IllegalStateException("No workspace")
-    val tasks = getJson(path("team", workspaceId, "task") {
-      addEncodedQueryParameter("assignees[]", id.userId.toString())
-      addQueryParameter("include_closed", "false")
-      addQueryParameter("subtasks", "false")
-      addQueryParameter("order_by", "due_date")
-    }).array("tasks").mapNotNull { shapeTask(it) }
+    val tasks = allPages { page ->
+      path("team", workspaceId, "task") {
+        addEncodedQueryParameter("assignees[]", id.userId.toString())
+        addQueryParameter("include_closed", "false")
+        addQueryParameter("subtasks", "false")
+        addQueryParameter("order_by", "due_date")
+        addQueryParameter("page", page.toString())
+      }
+    }
     return TaskFetch(tasks, workspaceName(id.teams, workspaceId).orEmpty(), emptyList())
+  }
+
+  /**
+   * Every page of a paged task listing (ClickUp returns up to 100 per page and `last_page`). The iCUE widget
+   * read page 0 only, which silently dropped tasks for anyone with 100+ open tasks. Capped at [MAX_PAGES].
+   */
+  private suspend fun allPages(url: (page: Int) -> HttpUrl): List<TaskItem> {
+    val tasks = mutableListOf<TaskItem>()
+    for (page in 0 until MAX_PAGES) {
+      val body = getJson(url(page))
+      val batch = body.array("tasks")
+      batch.mapNotNullTo(tasks) { shapeTask(it) }
+      val lastPage = body.asObject()?.get("last_page").asString()?.toBooleanStrictOrNull()
+      if (lastPage == true || batch.size < PAGE_SIZE) break
+    }
+    return tasks.distinctBy { it.id }
   }
 
   /** Statuses of a list in configured order; cached per list id for [STATUS_TTL_MS]. */
@@ -309,6 +331,8 @@ class ClickUpApi(
 
   companion object {
     private const val MAX_DESCRIPTION = 4000
+    private const val PAGE_SIZE = 100
+    private const val MAX_PAGES = 10
     private const val STATUS_TTL_MS = 10 * 60 * 1000L
     private const val UNTITLED = "(untitled)"
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()

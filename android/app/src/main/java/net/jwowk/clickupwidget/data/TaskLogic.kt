@@ -59,7 +59,8 @@ data class TaskListView(
 object TaskLogic {
 
   private const val NO_DUE_SORT = 9999.0
-  private val STATUS_TYPE_RANK = mapOf("open" to 0, "custom" to 1, "done" to 2, "closed" to 3)
+  // "unstarted" is ClickUp's newer "Not started" group (unknown to the iCUE JS, where it ranked last).
+  private val STATUS_TYPE_RANK = mapOf("open" to 0, "unstarted" to 1, "custom" to 2, "done" to 3, "closed" to 4)
   private val CLOSED_NAME = Regex("^(complete|done|closed)$", RegexOption.IGNORE_CASE)
   /** Stand-in for JS `localeCompare`: case-insensitive at primary level, lowercase-first ties. */
   private val NAME_ORDER: Comparator<String> = Collator.getInstance(Locale.ROOT).let { c -> Comparator { a, b -> c.compare(a, b) } }
@@ -116,7 +117,7 @@ object TaskLogic {
 
   /**
    * Chip order. With [listStatuses] (list mode): by the list's orderIndex (unknown = 999), then name.
-   * Otherwise by status type rank open 0, custom 1, done 2, closed 3, unknown 9, then name.
+   * Otherwise by status type rank open, unstarted, custom, done, closed, unknown last, then name.
    */
   fun orderStatuses(present: List<TaskStatus>, listStatuses: List<TaskStatus>): List<TaskStatus> {
     if (listStatuses.isNotEmpty()) {

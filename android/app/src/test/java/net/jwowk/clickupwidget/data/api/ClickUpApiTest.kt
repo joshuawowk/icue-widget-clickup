@@ -39,7 +39,8 @@ class ClickUpApiTest {
       override fun dispatch(request: RecordedRequest): MockResponse {
         seen += request
         val key = "${request.method} ${request.requestUrl!!.encodedPath.removePrefix("/api/v2")}"
-        return routes[key] ?: MockResponse().setResponseCode(404)
+        val page = request.requestUrl!!.queryParameter("page")
+        return page?.let { routes["$key#page=$it"] } ?: routes[key] ?: MockResponse().setResponseCode(404)
       }
     }
     server.start()
@@ -329,5 +330,17 @@ class ClickUpApiTest {
     } catch (e: ClickUpApiException) {
       assertEquals(401, e.code)
     }
+  }
+
+  @Test
+  fun myTasks_readsEveryPage() = runTest {
+    fun page(ids: IntRange, last: Boolean) =
+      """{"tasks":[${ids.joinToString(",") { """{"id":"t$it","name":"Task $it","list":{"id":"1","name":"L"}}""" }}],"last_page":$last}"""
+    route("GET /team/9001/task#page=0", page(1..100, last = false))
+    route("GET /team/9001/task#page=1", page(101..103, last = true))
+    route("GET /team/9001/task#page=2", page(900..901, last = true)) // must never be requested
+    val tasks = api().fetchTasks(WidgetConfig()).tasks
+    assertEquals(103, tasks.size)
+    assertEquals(listOf("0", "1"), requests("/team/9001/task").map { it.requestUrl!!.queryParameter("page") })
   }
 }

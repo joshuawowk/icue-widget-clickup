@@ -748,4 +748,9 @@ class TaskLogicTest {
     assertEquals(0xFFFFFFFFL, c)
     assertTrue(c > 0)
   }
+
+  @Test fun orderStatuses_unstartedRanksBetweenOpenAndCustom() {
+    val present = listOf(st("Active", "custom"), st("Backlog", "unstarted"), st("Open", "open"), st("Done", "done"))
+    assertEquals(listOf("Open", "Backlog", "Active", "Done"), TaskLogic.orderStatuses(present, emptyList()).map { it.name })
+  }
 }
