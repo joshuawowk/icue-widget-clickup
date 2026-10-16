@@ -8,16 +8,21 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.model.AccountInfo
 import net.jwowk.clickupwidget.data.model.ClickUpApiException
 import net.jwowk.clickupwidget.data.model.ListRef
+import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.NoTokenException
 import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.TaskDetail
+import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskFetch
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.TaskStatus
@@ -180,6 +185,7 @@ class ClickUpApi(
   suspend fun taskDetail(task: TaskItem): TaskDetail {
     var description = ""
     var fresh: TaskItem? = null
+    var fields: List<TaskField> = emptyList()
     var subs: List<TaskItem> = emptyList()
     var primaryError: Exception? = null
     try {
@@ -189,6 +195,7 @@ class ClickUpApi(
         description = (obj.str("text_content")?.takeIf { it.isNotBlank() } ?: obj.str("description").orEmpty())
           .trim().take(MAX_DESCRIPTION)
         fresh = shapeTask(obj, task)
+        fields = taskFields(obj)
         subs = full.array("subtasks").mapNotNull { shapeTask(it, task) }
           .filter { it.parentId == null || it.parentId == task.id }
       }
@@ -206,7 +213,7 @@ class ClickUpApi(
         if (primaryError != null) throw primaryError
       }
     }
-    return TaskDetail(fresh ?: task, description, subs)
+    return TaskDetail(fresh ?: task, description, subs, fields)
   }
 
   /** Moves the task to its list's closed status. */
@@ -226,6 +233,38 @@ class ClickUpApi(
       if (listId != null) statusCache.remove(listId) else statusCache.clear()
       throw e
     }
+  }
+
+  /** PUT /task/{id} {"priority": 1..4}, or {"priority": null} to clear it ([Priority.NONE]). */
+  suspend fun setPriority(taskId: String, priority: Priority) {
+    val token = checkToken()
+    val body = buildJsonObject {
+      put("priority", priority.apiValue?.let { JsonPrimitive(it) } ?: JsonNull)
+    }.toString().toRequestBody(JSON_MEDIA)
+    execute(authed(path("task", taskId), token).put(body).build()) { }
+  }
+
+  /**
+   * POST /list/{listId}/task; returns the created task as shaped by the response (nothing inherited).
+   * A blank name throws [IllegalArgumentException] before any request. `assignToMe` assigns the token's user.
+   */
+  suspend fun createTask(task: NewTask): TaskItem {
+    val name = task.name.trim()
+    require(name.isNotEmpty()) { "Task name must not be blank" }
+    val token = checkToken()
+    val me = if (task.assignToMe) identity().userId else null
+    val body = buildJsonObject {
+      put("name", name)
+      if (task.description.isNotBlank()) put("description", task.description)
+      task.priority.apiValue?.let { put("priority", it) }
+      task.dueMs?.let {
+        put("due_date", it)
+        put("due_date_time", false)
+      }
+      if (me != null) put("assignees", JsonArray(listOf(JsonPrimitive(me))))
+    }.toString().toRequestBody(JSON_MEDIA)
+    val created = execute(authed(path("list", task.listId, "task"), token).post(body).build()) { JSON.parseToJsonElement(it) }
+    return shapeTask(created) ?: throw IOException("Unexpected response creating task")
   }
 
   private suspend fun fetchSubtasksViaParent(parent: TaskItem): List<TaskItem> {
@@ -348,6 +387,7 @@ class ClickUpApi(
       val list = o["list"].asObject()
       val status = o["status"].asObject()
       val priority = o["priority"].asObject()
+      val tags = o.array("tags")
       return TaskItem(
         id = id,
         name = o.str("name")?.takeIf { it.isNotBlank() } ?: UNTITLED,
@@ -359,7 +399,12 @@ class ClickUpApi(
         status = status?.str("status").orEmpty(),
         statusColorHex = status?.str("color")?.takeIf { it.isNotBlank() } ?: "#888888",
         statusType = status?.str("type").orEmpty(),
-        tags = o.array("tags").mapNotNull { it.asObject()?.str("name") },
+        tags = tags.mapNotNull { it.asObject()?.str("name") },
+        tagColors = tags.mapNotNull { t ->
+          val tag = t.asObject() ?: return@mapNotNull null
+          val name = tag.str("name") ?: return@mapNotNull null
+          tag.str("tag_bg")?.takeIf { it.isNotBlank() }?.let { name to it }
+        }.toMap(),
         url = o.str("url"),
         parentId = o.str("parent"),
         teamId = o.str("team_id") ?: inherit?.teamId,

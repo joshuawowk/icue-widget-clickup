@@ -2,8 +2,10 @@ package net.jwowk.clickupwidget.data.api
 
 import kotlinx.coroutines.test.runTest
 import net.jwowk.clickupwidget.data.model.ClickUpApiException
+import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.NoTokenException
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import okhttp3.OkHttpClient
@@ -342,5 +344,161 @@ class ClickUpApiTest {
     val tasks = api().fetchTasks(WidgetConfig()).tasks
     assertEquals(103, tasks.size)
     assertEquals(listOf("0", "1"), requests("/team/9001/task").map { it.requestUrl!!.queryParameter("page") })
+  }
+
+  @Test
+  fun tagColors_parsedLeniently() = runTest {
+    route(
+      "GET /team/9001/task",
+      """
+      {"tasks":[{"id":"a","name":"A","tags":[
+        {"name":"meeting","tag_fg":"#cecece","tag_bg":"#0f5096"},
+        {"name":"nocolor"},
+        {"name":"blank","tag_bg":""},
+        {"name":"nullbg","tag_bg":null},
+        {"tag_bg":"#123456"}]},
+        {"id":"b","name":"B","tags":null}]}
+      """.trimIndent(),
+    )
+    val (a, b) = api().fetchTasks(WidgetConfig()).tasks
+    assertEquals(listOf("meeting", "nocolor", "blank", "nullbg"), a.tags)
+    assertEquals(mapOf("meeting" to "#0f5096"), a.tagColors)
+    assertTrue(b.tags.isEmpty() && b.tagColors.isEmpty())
+  }
+
+  @Test
+  fun taskDetail_includesFormattedFields() = runTest {
+    route(
+      "GET /task/p1",
+      """
+      {"id":"p1","name":"Parent","assignees":[{"username":"Josh"}],"time_estimate":5400000,
+       "custom_fields":[
+         {"type":"drop_down","name":"Requester","value":1,"type_config":{"options":[
+           {"id":"o0","name":"Ann","color":"#111111","orderindex":0},{"id":"o1","name":"Bob","color":"#222222","orderindex":1}]}},
+         {"type":"short_text","name":"Incident No.","value":"INC1"},
+         {"type":"short_text","name":"Empty","value":null}]}
+      """.trimIndent(),
+    )
+    route("GET /team/9001/task", """{"tasks":[]}""")
+    val fields = api().taskDetail(parent).fields
+    assertEquals(
+      listOf(
+        TaskField("Assignees", "Josh"),
+        TaskField("Time estimate", "1h 30m"),
+        TaskField("Requester", "Bob", "#222222"),
+        TaskField("Incident No.", "INC1"),
+      ),
+      fields,
+    )
+  }
+
+  @Test
+  fun taskDetail_fieldsEmptyWhenOnlyFallbackRan() = runTest {
+    route("GET /task/p1", "boom", code = 500)
+    route("GET /team/9001/task", """{"tasks":[{"id":"c1","name":"Child","parent":"p1"}]}""")
+    assertTrue(api().taskDetail(parent).fields.isEmpty())
+  }
+
+  @Test
+  fun setPriority_putsApiValueOrNull() = runTest {
+    route("PUT /task/t1", "{}")
+    val api = api()
+    api.setPriority("t1", Priority.URGENT)
+    api.setPriority("t1", Priority.LOW)
+    api.setPriority("t1", Priority.NONE)
+    val reqs = requests("/task/t1")
+    assertEquals(listOf("PUT", "PUT", "PUT"), reqs.map { it.method })
+    assertEquals("pk_test", reqs[0].getHeader("Authorization"))
+    assertTrue(reqs[0].getHeader("Content-Type")!!.startsWith("application/json"))
+    assertEquals(
+      listOf("""{"priority":1}""", """{"priority":4}""", """{"priority":null}"""),
+      reqs.map { it.body.readUtf8() },
+    )
+  }
+
+  @Test
+  fun setPriority_mapsErrors() = runTest {
+    route("PUT /task/t1", "{}", code = 403)
+    try {
+      api().setPriority("t1", Priority.HIGH)
+      fail("expected exception")
+    } catch (e: ClickUpApiException) {
+      assertEquals(403, e.code)
+    }
+    token = null
+    try {
+      api().setPriority("t1", Priority.HIGH)
+      fail("expected exception")
+    } catch (_: NoTokenException) {
+    }
+  }
+
+  @Test
+  fun createTask_sendsFullBodyAndShapesResponse() = runTest {
+    route(
+      "POST /list/77/task",
+      """
+      {"id":"new1","name":"Write docs","status":{"status":"to do","color":"#87909e","type":"open"},
+       "priority":{"priority":"high","color":"#ffcc00"},"due_date":"1792108800000",
+       "list":{"id":"77","name":"Eng"},"tags":[],"url":"https://app.clickup.com/t/new1","team_id":"9001"}
+      """.trimIndent(),
+    )
+    val created = api().createTask(
+      NewTask(listId = "77", name = "  Write docs ", description = "Details", dueMs = 1_792_108_800_000L, priority = Priority.HIGH),
+    )
+    val req = requests("/list/77/task").single()
+    assertEquals("POST", req.method)
+    assertEquals("pk_test", req.getHeader("Authorization"))
+    assertTrue(req.getHeader("Content-Type")!!.startsWith("application/json"))
+    assertEquals(
+      """{"name":"Write docs","description":"Details","priority":2,"due_date":1792108800000,"due_date_time":false,"assignees":[183]}""",
+      req.body.readUtf8(),
+    )
+    assertEquals("new1", created.id)
+    assertEquals("Write docs", created.name)
+    assertEquals("77", created.listId)
+    assertEquals("Eng", created.listName)
+    assertEquals(Priority.HIGH, created.priority)
+    assertEquals("to do", created.status)
+    assertEquals(1_792_108_800_000L, created.dueMs)
+    assertEquals("9001", created.teamId)
+  }
+
+  @Test
+  fun createTask_minimalBodyOmitsOptionalKeys() = runTest {
+    route("POST /list/77/task", """{"id":"new2","name":"Bare"}""")
+    val created = api().createTask(NewTask(listId = "77", name = "Bare", assignToMe = false))
+    assertEquals("""{"name":"Bare"}""", requests("/list/77/task").single().body.readUtf8())
+    assertTrue(requests("/user").isEmpty())
+    assertEquals("new2", created.id)
+    assertNull(created.listId)
+    assertEquals(Priority.NONE, created.priority)
+  }
+
+  @Test
+  fun createTask_blankNameFailsBeforeAnyRequest() = runTest {
+    try {
+      api().createTask(NewTask(listId = "77", name = "   "))
+      fail("expected exception")
+    } catch (_: IllegalArgumentException) {
+    }
+    assertTrue(seen.isEmpty())
+  }
+
+  @Test
+  fun createTask_errorsAndBadResponses() = runTest {
+    route("POST /list/77/task", "{}", code = 400)
+    try {
+      api().createTask(NewTask(listId = "77", name = "X", assignToMe = false))
+      fail("expected exception")
+    } catch (e: ClickUpApiException) {
+      assertEquals(400, e.code)
+    }
+    route("POST /list/77/task", """{"err":"no id"}""")
+    try {
+      api().createTask(NewTask(listId = "77", name = "X", assignToMe = false))
+      fail("expected exception")
+    } catch (_: java.io.IOException) {
+    }
   }
 }
