@@ -52,6 +52,7 @@ import androidx.glance.unit.ColorProvider
 import androidx.compose.ui.graphics.Color
 import net.jwowk.clickupwidget.R
 import net.jwowk.clickupwidget.data.DueClass
+import net.jwowk.clickupwidget.data.DueInfo
 import net.jwowk.clickupwidget.data.TaskListView
 import net.jwowk.clickupwidget.data.TaskLogic
 import net.jwowk.clickupwidget.data.TaskRow
@@ -517,52 +518,75 @@ private fun TaskRowView(
         )
       }
       Column(modifier = GlanceModifier.defaultWeight()) {
-        Text(
-          task.name,
-          style = style(if (inFlight) colors.muted else colors.text, dims.task, strike = inFlight),
-          maxLines = 2,
-        )
         val listName = task.listName.takeIf { dims.showListName && it.isNotBlank() }
         val due = row.due.takeIf { config.showDueChip }
         val prio = task.priority.takeIf { config.showPriority && it != Priority.NONE }
-        if (listName != null || due != null || prio != null) {
-          // Width left for the list name once the due chip and priority (and their gaps) are reserved.
-          val icon = dims.meta * 0.95f
-          var reserved = 0f
-          if (due != null) reserved += 8f + icon + 3f + WidgetMath.textWidthDp(due.label.length, dims.meta)
-          if (prio != null) {
-            reserved += 8f + icon
-            if (!dims.bp.narrow) reserved += 3f + WidgetMath.textWidthDp(prio.label.length, dims.meta)
+        val tagLabels = task.tags.takeIf { config.showTags && !dims.bp.narrow }.orEmpty().map { WidgetMath.tagLabel(it) }
+        val icon = dims.meta * 0.95f
+        // Use the empty space right of the text: due beside the name, priority/tags right on the list-name line.
+        val layout = WidgetMath.rowLayout(
+          textWidthDp = dims.textWidth,
+          listNameWidthDp = listName?.let { WidgetMath.textWidthDp(it.length, dims.meta) },
+          dueWidthDp = due?.let { icon + 3f + WidgetMath.textWidthDp(it.label.length, dims.meta) * BOLD_WIDTH },
+          priorityWidthDp = prio?.let {
+            icon + if (dims.bp.narrow) 0f else 3f + WidgetMath.textWidthDp(it.label.length, dims.meta) * BOLD_WIDTH
+          },
+          tagLabels = tagLabels,
+          chipSp = dims.chip,
+          metaSp = dims.meta,
+        )
+        val at = { slot: WidgetMath.Slot, part: WidgetMath.Slot -> slot == part }
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+          Text(
+            task.name,
+            modifier = GlanceModifier.defaultWeight(),
+            style = style(if (inFlight) colors.muted else colors.text, dims.task, strike = inFlight),
+            maxLines = 2,
+          )
+          if (due != null && at(layout.due, WidgetMath.Slot.NAME_LINE)) {
+            Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
+            DuePart(due, colors, dims, modifier = GlanceModifier.padding(top = ((dims.task - dims.meta) / 2f).dp))
           }
-          val nameChars = WidgetMath.listNameChars(dims.textWidth, reserved, dims.meta)
-          Row(verticalAlignment = Alignment.CenterVertically) {
+        }
+        val dueMeta = due != null && at(layout.due, WidgetMath.Slot.META_LINE)
+        val prioMeta = prio != null && at(layout.priority, WidgetMath.Slot.META_LINE)
+        val tagsMeta = at(layout.tags, WidgetMath.Slot.META_LINE)
+        if (listName != null || dueMeta || prioMeta || tagsMeta) {
+          Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (listName != null) {
-              Text(WidgetMath.ellipsize(listName, nameChars), style = style(colors.muted, dims.meta), maxLines = 1)
+              Text(
+                WidgetMath.ellipsize(listName, layout.listNameChars),
+                modifier = GlanceModifier.defaultWeight(),
+                style = style(colors.muted, dims.meta),
+                maxLines = 1,
+              )
+            } else {
+              Spacer(GlanceModifier.defaultWeight())
             }
-            if (due != null) {
-              if (listName != null) Spacer(GlanceModifier.width(8.dp))
-              val dueColor = when (due.cls) {
-                DueClass.OVERDUE -> colors.overdue
-                DueClass.TODAY -> colors.today
-                DueClass.SOON -> colors.soon
-                DueClass.LATER -> colors.muted
-              }
-              Icon(R.drawable.ic_w_calendar, dueColor, icon.dp)
-              Spacer(GlanceModifier.width(3.dp))
-              Text(due.label, style = style(dueColor, dims.meta, bold = true), maxLines = 1)
+            if (dueMeta) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); DuePart(due, colors, dims) }
+            if (prioMeta) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); PriorityPart(prio, colors, dims) }
+            if (tagsMeta) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); TagChips(task, tagLabels, layout.tagChips, colors, dims) }
+          }
+        }
+        val dueBelow = due != null && at(layout.due, WidgetMath.Slot.BELOW)
+        val prioBelow = prio != null && at(layout.priority, WidgetMath.Slot.BELOW)
+        val tagsBelow = at(layout.tags, WidgetMath.Slot.BELOW) && layout.tagChips > 0
+        if (dueBelow || prioBelow) {
+          Row(modifier = GlanceModifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (dueBelow) DuePart(due, colors, dims)
+            if (prioBelow) {
+              if (dueBelow) Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
+              PriorityPart(prio, colors, dims)
             }
-            if (prio != null) {
-              if (listName != null || due != null) Spacer(GlanceModifier.width(8.dp))
-              val prioColor = ColorProvider(Color(prio.chipColor))
-              Icon(R.drawable.ic_w_flag, prioColor, icon.dp)
-              if (!dims.bp.narrow) {
-                Spacer(GlanceModifier.width(3.dp))
-                Text(prio.label, style = style(prioColor, dims.meta, bold = true), maxLines = 1)
-              }
+            if (tagsBelow && layout.tagsInlineBelow) {
+              Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
+              TagChips(task, tagLabels, layout.tagChips, colors, dims)
             }
           }
         }
-        if (config.showTags && task.tags.isNotEmpty() && !dims.bp.narrow) TagLine(task, colors, dims)
+        if (tagsBelow && !layout.tagsInlineBelow) {
+          Box(GlanceModifier.padding(top = 2.dp)) { TagChips(task, tagLabels, layout.tagChips, colors, dims) }
+        }
       }
       if (dims.showStar) {
         Spacer(GlanceModifier.width(6.dp))
@@ -577,18 +601,48 @@ private fun TaskRowView(
   }
 }
 
-/** Meta line 2: up to [WidgetMath.MAX_TAG_CHIPS] tag chips (solid tag color) that fit, then "+N" for the rest. */
+/** Bold meta text runs a little wider than the plain glyph estimate. */
+private const val BOLD_WIDTH = 1.05f
+
+/** Calendar icon + due label in its urgency color. */
 @Composable
-private fun TagLine(task: TaskItem, colors: WidgetColors, dims: Dims) {
-  val labels = task.tags.map { WidgetMath.tagLabel(it) }
-  val shown = WidgetMath.fitTagChips(labels, dims.chip, dims.textWidth)
-  Row(modifier = GlanceModifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun DuePart(due: DueInfo, colors: WidgetColors, dims: Dims, modifier: GlanceModifier = GlanceModifier) {
+  val color = when (due.cls) {
+    DueClass.OVERDUE -> colors.overdue
+    DueClass.TODAY -> colors.today
+    DueClass.SOON -> colors.soon
+    DueClass.LATER -> colors.muted
+  }
+  Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+    Icon(R.drawable.ic_w_calendar, color, (dims.meta * 0.95f).dp)
+    Spacer(GlanceModifier.width(3.dp))
+    Text(due.label, style = style(color, dims.meta, bold = true), maxLines = 1)
+  }
+}
+
+/** Flag in the priority color, plus its name unless the widget is narrow. */
+@Composable
+private fun PriorityPart(priority: Priority, colors: WidgetColors, dims: Dims) {
+  val color = colors.priority(priority)
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    Icon(R.drawable.ic_w_flag, color, (dims.meta * 0.95f).dp)
+    if (!dims.bp.narrow) {
+      Spacer(GlanceModifier.width(3.dp))
+      Text(priority.label, style = style(color, dims.meta, bold = true), maxLines = 1)
+    }
+  }
+}
+
+/** The first [shown] tag chips (solid tag color) then "+N" for the rest. */
+@Composable
+private fun TagChips(task: TaskItem, labels: List<String>, shown: Int, colors: WidgetColors, dims: Dims) {
+  Row(verticalAlignment = Alignment.CenterVertically) {
     for (i in 0 until shown) {
       // Solid tag color (as ClickUp shows tags) with black/white text by luminance: a translucent tint
       // renders washed-out in RemoteViews, leaving light text on a pale chip.
       val fill = TaskLogic.parseColor(task.tagColors[task.tags[i]], fallback = 0xFF6B7280)
       val ink = ColorProvider(Color(if (Palettes.isDark(fill)) 0xFFFFFFFF else 0xFF111111))
-      Box(modifier = GlanceModifier.padding(end = 4.dp)) {
+      Box(modifier = GlanceModifier.padding(end = if (i < shown - 1 || shown < labels.size) 4.dp else 0.dp)) {
         Box(
           modifier = GlanceModifier
             .background(ImageProvider(R.drawable.widget_pill), colorFilter = ColorFilter.tint(ColorProvider(Color(fill))))

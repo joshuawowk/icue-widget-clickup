@@ -20,6 +20,8 @@ ClickUp API with your personal token — no companion service.
 
 ## Features
 
+- **Rows use the full width** — the due date sits beside the task name, priority and tags line up on the
+  right of the list name; whatever doesn't fit moves underneath (narrow widgets stack it)
 - **Same function and form as the iCUE widget** — header with title, workspace and task count;
   due chips; **priority flags** and **tag chips** (in ClickUp's tag colors); priority stars; list names;
   "+N more"; offline fallback to the last good data

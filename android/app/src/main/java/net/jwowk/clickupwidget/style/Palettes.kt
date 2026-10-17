@@ -1,5 +1,6 @@
 package net.jwowk.clickupwidget.style
 
+import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.ThemeMode
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 
@@ -63,6 +64,18 @@ object Palettes {
     ThemeMode.CLICKUP_LIGHT -> ClickUpLight
     ThemeMode.CLICKUP_AUTO -> if (nightMode) ClickUpDark else ClickUpLight
     ThemeMode.CUSTOM -> custom(config)
+  }
+
+  /**
+   * Priority label/flag color: ClickUp's own colors on dark backgrounds; on light backgrounds darker shades,
+   * because ClickUp's yellow (high) and light cyan (normal) are unreadable on white.
+   */
+  fun priorityInk(priority: Priority, onDark: Boolean): Long = if (onDark) priority.chipColor else when (priority) {
+    Priority.URGENT -> 0xFFDC2626
+    Priority.HIGH -> 0xFFB45309
+    Priority.NORMAL -> 0xFF0369A1
+    Priority.LOW -> 0xFF64748B
+    Priority.NONE -> 0xFF6B7280
   }
 
   /** Relative luminance < 0.5 → dark. */
