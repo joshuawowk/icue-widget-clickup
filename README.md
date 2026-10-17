@@ -23,7 +23,8 @@ A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Da
   - Chips are independent toggles — selecting none *or* all of a row means "show everything" for that row; an accent dot by the header shows when a filter is narrowing the list
 - **Due chips**: red *Overdue*, pink *Today*, amber *Tomorrow / this week*, muted dates beyond
 - **Priority stars**: filled accent star for `urgent` / `high` tasks
-- **Priority and tags in every row**: a small flag + label in the ClickUp priority color (only when a priority is set), and up to three tag chips in the tag's own ClickUp color with a `+N` overflow — tags sit on their own line, so rows stay tidy at every Xeneon Edge size
+- **Priority and tags in every row**: a small flag + label in the ClickUp priority color (only when a priority is set), and up to three tag chips in the tag's own ClickUp color with a `+N` overflow
+- **Rows use the full width**: the due chip sits right-aligned beside the task name (names wrap to two lines), and priority + tags line up on the right of the list name; anything that doesn't fit wraps underneath, still right-aligned, so rows stay tidy at every Xeneon Edge size
 - **Offline resilience**: keeps showing the last good data with an `offline` tag if the network drops
 - **Responsive**: all Xeneon Edge slot sizes — S/M/L/XL, horizontal (multi-column on L/XL) and vertical
 - **Personalization**: text/accent/background colors, background image with glass blur, transparency
