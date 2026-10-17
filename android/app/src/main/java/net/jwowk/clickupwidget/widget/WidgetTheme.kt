@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.glance.GlanceTheme
 import androidx.glance.unit.ColorProvider
 import net.jwowk.clickupwidget.R
+import net.jwowk.clickupwidget.data.model.Priority
 import net.jwowk.clickupwidget.data.model.ThemeMode
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.style.Palettes
@@ -30,6 +31,8 @@ internal class WidgetColors(
   val toastBackground: ColorProvider,
   val toastText: ColorProvider,
   val toastAction: ColorProvider,
+  /** Priority flag/label color, legible on this background (see [Palettes.priorityInk]). */
+  val priority: (Priority) -> ColorProvider,
 )
 
 private val BG_RES = intArrayOf(
@@ -73,6 +76,7 @@ internal fun widgetColors(config: WidgetConfig): WidgetColors {
       toastBackground = c.inverseSurface,
       toastText = c.inverseOnSurface,
       toastAction = c.inversePrimary,
+      priority = { p -> DayNight(day = argb(Palettes.priorityInk(p, onDark = false)), night = argb(Palettes.priorityInk(p, onDark = true))) },
     )
   }
   val day = Palettes.forConfig(config, nightMode = false)!!
@@ -95,5 +99,6 @@ internal fun widgetColors(config: WidgetConfig): WidgetColors {
     toastBackground = pick { mix(it.background, it.text, 0.14f) },
     toastText = pick { it.text },
     toastAction = pick { it.accent },
+    priority = { p -> pick { Palettes.priorityInk(p, onDark = it.isDark) } },
   )
 }
