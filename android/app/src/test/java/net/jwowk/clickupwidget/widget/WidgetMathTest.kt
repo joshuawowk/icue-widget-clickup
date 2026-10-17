@@ -128,4 +128,61 @@ class WidgetMathTest {
     assertEquals(2, WidgetMath.sampleSize(1440, 900, 720))
     assertEquals(8, WidgetMath.sampleSize(3000, 4000, 720))
   }
+
+  // ---- rowLayout: use the space right of the task text ----
+
+  private fun layout(textW: Float, list: Float? = 60f, due: Float? = 55f, prio: Float? = 45f, tags: List<String> = emptyList()) =
+    WidgetMath.rowLayout(textW, list, due, prio, tags, chipSp = 11f, metaSp = 12f)
+
+  @Test fun rowLayoutWideRowPutsEverythingOnTheRight() {
+    val l = layout(300f, tags = listOf("bug", "customer"))
+    assertEquals(WidgetMath.Slot.NAME_LINE, l.due)
+    assertEquals(WidgetMath.Slot.META_LINE, l.priority)
+    assertEquals(WidgetMath.Slot.META_LINE, l.tags)
+    assertEquals(2, l.tagChips)
+  }
+
+  @Test fun rowLayoutDueMovesToMetaLineWhenTooWideBesideName() {
+    // 55dp > 40% of 120dp: the name keeps line 1; due goes right on line 2 (no list name shown).
+    val l = layout(120f, list = null, prio = null)
+    assertEquals(WidgetMath.Slot.META_LINE, l.due)
+  }
+
+  @Test fun rowLayoutOverflowKeepsOrderAndDropsTheRestBelow() {
+    // Line 2: 160 - min(60,72) - 8 = 92dp budget; priority (45) fits, tags (~4 chips) don't -> below.
+    val l = layout(160f, tags = listOf("finance", "quarter-end", "ops", "review"))
+    assertEquals(WidgetMath.Slot.NAME_LINE, l.due)
+    assertEquals(WidgetMath.Slot.META_LINE, l.priority)
+    assertEquals(WidgetMath.Slot.BELOW, l.tags)
+    assertTrue(l.tagChips in 1..3)
+  }
+
+  @Test fun rowLayoutOnceSomethingOverflowsLaterPartsGoBelowToo() {
+    // Budget 100 - 60 - 8 = 32: priority (45) overflows, so small tags may not jump ahead of it.
+    val l = layout(100f, due = null, tags = listOf("x"))
+    assertEquals(WidgetMath.Slot.BELOW, l.priority)
+    assertEquals(WidgetMath.Slot.BELOW, l.tags)
+  }
+
+  @Test fun rowLayoutAbsentPartsAreNone() {
+    val l = layout(300f, list = null, due = null, prio = null)
+    assertEquals(WidgetMath.Slot.NONE, l.due)
+    assertEquals(WidgetMath.Slot.NONE, l.priority)
+    assertEquals(WidgetMath.Slot.NONE, l.tags)
+  }
+
+  @Test fun rowLayoutListNameGetsTheLeftoverWidth() {
+    val roomy = layout(300f, prio = null)
+    val tight = layout(300f, tags = listOf("finance", "planning", "ops"))
+    assertTrue(roomy.listNameChars > tight.listNameChars)
+  }
+
+  @Test fun rowLayoutDroppedPartsShareOneLineWhenTheyFit() {
+    // Budget 160 - 60 - 8 = 92: due (75) fits on line 2 if not beside the name; priority (45) then drops
+    // below, and the single short tag fits next to it on that same extra line.
+    val l = layout(160f, due = 75f, tags = listOf("launch"))
+    assertEquals(WidgetMath.Slot.BELOW, l.priority)
+    assertEquals(WidgetMath.Slot.BELOW, l.tags)
+    assertTrue(l.tagsInlineBelow)
+  }
 }
