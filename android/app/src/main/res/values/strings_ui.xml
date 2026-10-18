@@ -92,6 +92,7 @@
     <string name="ui_show_subtitle">Show subtitle</string>
     <string name="ui_show_count">Show task count</string>
     <string name="ui_show_list_name">Show list name</string>
+    <string name="ui_show_requester">Show requester</string>
     <string name="ui_show_due_chip">Show due date chip</string>
     <string name="ui_show_priority_star">Show priority star</string>
     <string name="ui_show_priority">Show priority</string>

@@ -118,6 +118,34 @@ class TaskFieldsTest {
     }
   }
 
+  private fun requester(json: String) = requesterField(Json.parseToJsonElement(json).jsonObject, Locale.US, utc)
+
+  @Test
+  fun requesterField_dropDownByOrderindexOrOptionId() {
+    val options = """"type_config":{"options":[
+      {"id":"cad9","name":"Ariana Carlone","color":"#9b59b6","orderindex":0},
+      {"id":"beef","name":"Becky Puleo","color":"#800000","orderindex":17}]}"""
+    assertEquals(
+      "Becky Puleo" to "#800000",
+      requester("""{"custom_fields":[{"type":"drop_down","name":"Requester","value":17,$options}]}"""),
+    )
+    assertEquals(
+      "Ariana Carlone" to "#9b59b6",
+      requester("""{"custom_fields":[{"type":"drop_down","name":" requester ","value":"cad9",$options}]}"""),
+    )
+  }
+
+  @Test
+  fun requesterField_otherTypesAndAbsence() {
+    assertEquals(
+      "Josh, Ann" to null,
+      requester("""{"custom_fields":[{"type":"users","name":"Requester","value":[{"username":"Josh"},{"username":"Ann"}]}]}"""),
+    )
+    assertNull(requester("{}"))
+    assertNull(requester("""{"custom_fields":[{"type":"short_text","name":"Incident No.","value":"INC1"}]}"""))
+    assertNull(requester("""{"custom_fields":[{"type":"drop_down","name":"Requester","type_config":{"options":[]}}]}"""))
+  }
+
   @Test
   fun realExamples() {
     val out = fields(

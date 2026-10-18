@@ -90,10 +90,10 @@ class WidgetMathTest {
     assertEquals(0, WidgetMath.fitTagChips(listOf("meeting"), 11f, 20f))
   }
 
-  @Test fun listNameCharsClampsToRange() {
-    assertEquals(24, WidgetMath.listNameChars(1000f, 0f, 12f))
-    assertEquals(6, WidgetMath.listNameChars(50f, 100f, 12f))
-    val mid = WidgetMath.listNameChars(150f, 50f, 12f)
+  @Test fun textCharsClampsToRange() {
+    assertEquals(24, WidgetMath.textChars(1000f, 12f))
+    assertEquals(6, WidgetMath.textChars(-50f, 12f))
+    val mid = WidgetMath.textChars(100f, 12f)
     assertTrue(mid in 6..24)
     assertEquals(13, mid)
   }
@@ -129,60 +129,74 @@ class WidgetMathTest {
     assertEquals(8, WidgetMath.sampleSize(3000, 4000, 720))
   }
 
-  // ---- rowLayout: use the space right of the task text ----
+  // ---- rowLayout: line 2 = list name, requester, tags (left) + priority (right) ----
 
-  private fun layout(textW: Float, list: Float? = 60f, due: Float? = 55f, prio: Float? = 45f, tags: List<String> = emptyList()) =
-    WidgetMath.rowLayout(textW, list, due, prio, tags, chipSp = 11f, metaSp = 12f)
+  // At metaSp 12 one glyph is 7.2dp; at chipSp 11 a tag chip is 6.6dp per char + 16dp chrome.
+  private fun layout(textW: Float, list: Float? = 60f, req: Float? = 70f, prio: Float? = 45f, tags: List<String> = emptyList()) =
+    WidgetMath.rowLayout(textW, list, req, prio, tags, chipSp = 11f, metaSp = 12f)
 
-  @Test fun rowLayoutWideRowPutsEverythingOnTheRight() {
-    val l = layout(300f, tags = listOf("bug", "customer"))
-    assertEquals(WidgetMath.Slot.NAME_LINE, l.due)
-    assertEquals(WidgetMath.Slot.META_LINE, l.priority)
+  @Test fun rowLayoutWideRowKeepsEverythingOnLine2() {
+    val l = layout(400f, tags = listOf("bug", "customer"))
     assertEquals(WidgetMath.Slot.META_LINE, l.tags)
     assertEquals(2, l.tagChips)
+    // Both texts fit whole (60dp ≈ 8.3 chars, 70dp ≈ 9.7 chars).
+    assertTrue(l.listNameChars >= 9)
+    assertTrue(l.requesterChars >= 10)
   }
 
-  @Test fun rowLayoutDueMovesToMetaLineWhenTooWideBesideName() {
-    // 55dp > 40% of 120dp: the name keeps line 1; due goes right on line 2 (no list name shown).
-    val l = layout(120f, list = null, prio = null)
-    assertEquals(WidgetMath.Slot.META_LINE, l.due)
+  @Test fun rowLayoutMoreThanThreeTagsShowPlusNOnLine2() {
+    val l = layout(400f, tags = listOf("a", "b", "c", "d", "e"))
+    assertEquals(WidgetMath.Slot.META_LINE, l.tags)
+    assertEquals(3, l.tagChips)
   }
 
-  @Test fun rowLayoutOverflowKeepsOrderAndDropsTheRestBelow() {
-    // Line 2: 160 - min(60,72) - 8 = 92dp budget; priority (45) fits, tags (~4 chips) don't -> below.
-    val l = layout(160f, tags = listOf("finance", "quarter-end", "ops", "review"))
-    assertEquals(WidgetMath.Slot.NAME_LINE, l.due)
-    assertEquals(WidgetMath.Slot.META_LINE, l.priority)
+  @Test fun rowLayoutTagsDropBelowRatherThanSqueezeTheTexts() {
+    // Left of priority: 220 - 45 - 8 = 167dp; texts keep 56 + 56 + 2 gaps = 128 -> 39dp, too little for "finance".
+    val l = layout(220f, list = 80f, req = 100f, tags = listOf("finance", "quarter-end", "ops"))
     assertEquals(WidgetMath.Slot.BELOW, l.tags)
-    assertTrue(l.tagChips in 1..3)
+    assertEquals(3, l.tagChips) // all three fit a full line below
+    // 167 - 8 = 159dp for two texts both wider than half: 79.5dp each -> 11 chars.
+    assertEquals(11, l.listNameChars)
+    assertEquals(11, l.requesterChars)
   }
 
-  @Test fun rowLayoutOnceSomethingOverflowsLaterPartsGoBelowToo() {
-    // Budget 100 - 60 - 8 = 32: priority (45) overflows, so small tags may not jump ahead of it.
-    val l = layout(100f, due = null, tags = listOf("x"))
-    assertEquals(WidgetMath.Slot.BELOW, l.priority)
-    assertEquals(WidgetMath.Slot.BELOW, l.tags)
+  @Test fun rowLayoutRequesterIsTrimmedBeforeTagsLeaveLine2() {
+    // 260 - 53 = 207dp; reserve 56 + 56 + 16 = 128 leaves 79dp: "bug" (35.8dp) stays on line 2. Texts get
+    // 207 - 35.8 - 16 = 155.2dp: the short list name stays whole, the requester gets 155.2 - 60 = 95.2dp.
+    val l = layout(260f, list = 60f, req = 110f, tags = listOf("bug"))
+    assertEquals(WidgetMath.Slot.META_LINE, l.tags)
+    assertEquals(13, l.requesterChars)
+    assertTrue(l.listNameChars >= 9)
+  }
+
+  @Test fun rowLayoutPriorityKeepsItsRoom() {
+    val without = layout(200f, list = 100f, req = 100f, prio = null)
+    val with = layout(200f, list = 100f, req = 100f, prio = 60f)
+    assertEquals(13, without.listNameChars) // (200 - 8) / 2 = 96dp
+    assertEquals(8, with.listNameChars) // (200 - 68 - 8) / 2 = 62dp
+    assertEquals(8, with.requesterChars)
+  }
+
+  @Test fun rowLayoutRequesterAloneGetsTheWholeLine() {
+    val l = layout(150f, list = null, req = 250f, prio = null)
+    assertEquals(20, l.requesterChars) // 150 / 7.2
+  }
+
+  @Test fun rowLayoutRequesterChromeComesOutOfItsRoom() {
+    val l = WidgetMath.rowLayout(150f, null, 250f, null, emptyList(), chipSp = 11f, metaSp = 12f, requesterChromeDp = 14.4f)
+    assertEquals(18, l.requesterChars) // (150 - 14.4) / 7.2
   }
 
   @Test fun rowLayoutAbsentPartsAreNone() {
-    val l = layout(300f, list = null, due = null, prio = null)
-    assertEquals(WidgetMath.Slot.NONE, l.due)
-    assertEquals(WidgetMath.Slot.NONE, l.priority)
+    val l = layout(300f, list = null, req = null, prio = null)
     assertEquals(WidgetMath.Slot.NONE, l.tags)
+    assertEquals(0, l.tagChips)
   }
 
-  @Test fun rowLayoutListNameGetsTheLeftoverWidth() {
-    val roomy = layout(300f, prio = null)
-    val tight = layout(300f, tags = listOf("finance", "planning", "ops"))
-    assertTrue(roomy.listNameChars > tight.listNameChars)
-  }
-
-  @Test fun rowLayoutDroppedPartsShareOneLineWhenTheyFit() {
-    // Budget 160 - 60 - 8 = 92: due (75) fits on line 2 if not beside the name; priority (45) then drops
-    // below, and the single short tag fits next to it on that same extra line.
-    val l = layout(160f, due = 75f, tags = listOf("launch"))
-    assertEquals(WidgetMath.Slot.BELOW, l.priority)
-    assertEquals(WidgetMath.Slot.BELOW, l.tags)
-    assertTrue(l.tagsInlineBelow)
+  @Test fun shareRoomSplitsFairly() {
+    assertEquals(60f to 70f, WidgetMath.shareRoom(100f, 30f, 40f)) // both fit; spare goes to both
+    assertEquals(50f to 80f, WidgetMath.shareRoom(100f, 20f, 200f)) // short one whole, long one the rest
+    assertEquals(80f to 50f, WidgetMath.shareRoom(100f, 200f, 20f))
+    assertEquals(50f to 50f, WidgetMath.shareRoom(100f, 200f, 300f))
   }
 }

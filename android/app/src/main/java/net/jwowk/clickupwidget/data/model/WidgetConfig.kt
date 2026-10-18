@@ -85,6 +85,8 @@ data class WidgetConfig(
   val showPriority: Boolean = true,
   /** Tag chips in each row's meta line. */
   val showTags: Boolean = true,
+  /** "Requester" custom field (color dot + name) in each row's meta line. */
+  val showRequester: Boolean = true,
   /** Optional processed (downscaled, pre-blurred) background image in app-private storage. */
   val backgroundImagePath: String? = null,
   /** 0..25 blur radius that was applied to [backgroundImagePath] (informational / for re-processing). */

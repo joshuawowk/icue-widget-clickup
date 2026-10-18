@@ -121,6 +121,7 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
       }
       fun task(
         n: Int, name: String, list: ListRef, days: Long?, priority: Priority, status: TaskStatus, tags: List<String> = emptyList(),
+        requester: String? = null,
       ) = TaskItem(
         id = "demo-$n",
         name = name,
@@ -134,13 +135,15 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
         statusType = status.type,
         tags = tags,
         tagColors = tags.mapNotNull { t -> TAG_COLORS[t]?.let { t to it } }.toMap(),
+        requester = requester,
+        requesterColorHex = requester?.let { REQUESTER_COLORS[it] },
       )
       val (eng, ops, mkt) = LISTS
       return listOf(
-        task(1, "Fix login redirect loop", eng, -2, Priority.URGENT, IN_PROGRESS, listOf("bug", "customer")),
-        task(2, "Review pull request #482", eng, 0, Priority.HIGH, IN_PROGRESS, listOf("review")),
+        task(1, "Fix login redirect loop", eng, -2, Priority.URGENT, IN_PROGRESS, listOf("bug", "customer"), "Ariana Carlone"),
+        task(2, "Review pull request #482", eng, 0, Priority.HIGH, IN_PROGRESS, listOf("review"), "Dana Reyes"),
         task(3, "Update deployment runbook", ops, 0, Priority.NORMAL, TO_DO, listOf("docs")),
-        task(4, "Prepare Q4 launch checklist", mkt, 1, Priority.NORMAL, IN_PROGRESS, listOf("launch")),
+        task(4, "Prepare Q4 launch checklist", mkt, 1, Priority.NORMAL, IN_PROGRESS, listOf("launch"), "Becky Puleo"),
         task(5, "Plan sprint retrospective", eng, 4, Priority.NORMAL, IN_PROGRESS),
         task(6, "Renew monitoring licenses", ops, 10, Priority.HIGH, TO_DO),
         task(7, "Investigate slow dashboard queries", eng, null, Priority.URGENT, REVIEW, listOf("performance")),
@@ -179,6 +182,13 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
       "performance" to "#b660e0",
     )
 
+    /** Requester drop-down option colors (match [sampleFields]). */
+    private val REQUESTER_COLORS = mapOf(
+      "Ariana Carlone" to "#9b59b6",
+      "Becky Puleo" to "#800000",
+      "Dana Reyes" to "#1abc9c",
+    )
+
     /** Read-only populated fields for a few demo tasks (what the live API's custom fields would give). */
     private fun sampleFields(taskId: String, nowMs: Long): List<TaskField> {
       val zone = ZoneId.systemDefault()
@@ -190,6 +200,10 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
           TaskField("Requester", "Ariana Carlone", "#9b59b6"),
           TaskField("Incident No.", "INC2383904"),
           TaskField("Created", date(-6) + " by Becky Puleo"),
+        )
+        "demo-2" -> listOf(
+          TaskField("Assignees", "Demo User"),
+          TaskField("Requester", "Dana Reyes", "#1abc9c"),
         )
         "demo-4" -> listOf(
           TaskField("Assignees", "Demo User, Becky Puleo"),

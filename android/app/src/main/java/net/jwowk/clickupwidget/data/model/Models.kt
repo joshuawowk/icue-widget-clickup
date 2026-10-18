@@ -57,6 +57,10 @@ data class TaskItem(
   val tags: List<String> = emptyList(),
   /** Tag name → ClickUp tag background color (tag_bg, e.g. "#0f5096"); tags without a color are absent. */
   val tagColors: Map<String, String> = emptyMap(),
+  /** Value of the task's "Requester" custom field (e.g. a drop-down option name), or null if unset. */
+  val requester: String? = null,
+  /** Color of the requester's drop-down option, e.g. "#800000"; null if it has none. */
+  val requesterColorHex: String? = null,
   /** Web URL of the task (https://app.clickup.com/t/<id>). */
   val url: String? = null,
   val parentId: String? = null,
