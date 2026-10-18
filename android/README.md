@@ -47,7 +47,8 @@ ClickUp API with your personal token — no companion service.
     not Pixel-only — any Android 12+ phone with dynamic color works, though OEM palettes vary)
   - **ClickUp dark / light / follow dark mode** — the iCUE look
   - **Custom** text / accent / background colors
-  - Background opacity, text size (80–140 %), row density, optional background image with blur,
+  - Background opacity (the header stays opaque), text size (80–140 %), row density, optional background
+    image with blur (shown below the header),
     and toggles for subtitle, count, list names, requester, due chips, priority, tags and stars
 - **Refresh** every 15 / 30 / 60 / 120 min (Android's background minimum is 15 min) and on demand
 - **States** like the iCUE widget: loading, setup (no token), all clear, filtered-to-zero, error
