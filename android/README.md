@@ -20,8 +20,12 @@ ClickUp API with your personal token — no companion service.
 
 ## Features
 
-- **Rows use the full width** — the due date sits beside the task name, priority and tags line up on the
-  right of the list name; whatever doesn't fit moves underneath (narrow widgets stack it)
+- **Two-line rows** — line 1: task name, due date on the right; line 2: list name, **requester** (your
+  ClickUp "Requester" custom field, with its drop-down color) and tags on the left, priority on the right
+  under the due date. Tags that don't fit beside the list name and requester move to a line underneath
+
+  <img src="docs/widget-rows.png" width="420" alt="Task rows: due date and priority on the right; list name, requester and tags on the left">
+
 - **Same function and form as the iCUE widget** — header with title, workspace and task count;
   due chips; **priority flags** and **tag chips** (in ClickUp's tag colors); priority stars; list names;
   "+N more"; offline fallback to the last good data
@@ -36,7 +40,7 @@ ClickUp API with your personal token — no companion service.
     change), **subtasks** (X of Y done, quick-complete with Undo), **status pills**; Open in ClickUp
 - **My Tasks** (everything assigned to you) or a **single list** (picked from your workspace, or by List ID)
 - **Per-widget settings** — every widget instance has its own source, filters and style
-- **Resizable** from 2×2 upward; the layout adapts (narrow widgets drop list names, stars, tags and the count;
+- **Resizable** from 2×2 upward; the layout adapts (narrow widgets drop list names, requesters, stars, tags and the count;
   short ones the subtitle; the title always keeps its room)
 - **Style**
   - **System (Material You)** — follows your wallpaper colors and light/dark mode (Android 12+; this is
@@ -44,7 +48,7 @@ ClickUp API with your personal token — no companion service.
   - **ClickUp dark / light / follow dark mode** — the iCUE look
   - **Custom** text / accent / background colors
   - Background opacity, text size (80–140 %), row density, optional background image with blur,
-    and toggles for subtitle, count, list names, due chips, priority, tags and stars
+    and toggles for subtitle, count, list names, requester, due chips, priority, tags and stars
 - **Refresh** every 15 / 30 / 60 / 120 min (Android's background minimum is 15 min) and on demand
 - **States** like the iCUE widget: loading, setup (no token), all clear, filtered-to-zero, error
   (a rejected token says so and opens the app), and `• offline` with the last good data on network errors

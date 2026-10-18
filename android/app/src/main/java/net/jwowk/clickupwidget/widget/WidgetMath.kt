@@ -58,8 +58,17 @@ internal object WidgetMath {
   /** Display label for a tag chip. */
   fun tagLabel(name: String): String = ellipsize(name, MAX_TAG_CHARS)
 
-  /** Estimated rendered width of a tag chip in dp. */
-  fun tagChipWidthDp(label: String, fontSp: Float): Float = label.length * fontSp * GLYPH_EM + TAG_CHROME_DP
+  /** Rendered width of [text] in dp at [sp]. The widget measures with the platform font; tests use [ESTIMATE]. */
+  fun interface TextMeasure {
+    fun widthDp(text: String, sp: Float, bold: Boolean): Float
+  }
+
+  /** Font-free estimate: [GLYPH_EM] of the font size per glyph (on the wide side for proportional fonts). */
+  val ESTIMATE = TextMeasure { text, sp, _ -> textWidthDp(text.length, sp) }
+
+  /** Rendered width of a tag chip in dp. */
+  fun tagChipWidthDp(label: String, fontSp: Float, measure: TextMeasure = ESTIMATE): Float =
+    measure.widthDp(label, fontSp, true) + TAG_CHROME_DP
 
   /** Estimated rendered width of plain meta text (no chrome) in dp. */
   fun textWidthDp(chars: Int, fontSp: Float): Float = chars * fontSp * GLYPH_EM
@@ -68,11 +77,15 @@ internal object WidgetMath {
    * How many of the tag chips for [labels] (display labels, in order) fit one line of [availableDp]
    * together with the trailing "+N" counter for the ones left out. Returns the count to show (0..[maxChips]).
    */
-  fun fitTagChips(labels: List<String>, fontSp: Float, availableDp: Float, maxChips: Int = MAX_TAG_CHIPS): Int {
+  fun fitTagChips(
+    labels: List<String>,
+    fontSp: Float,
+    availableDp: Float,
+    maxChips: Int = MAX_TAG_CHIPS,
+    measure: TextMeasure = ESTIMATE,
+  ): Int {
     for (k in minOf(labels.size, maxChips) downTo 1) {
-      val chips = labels.take(k).sumOf { tagChipWidthDp(it, fontSp).toDouble() }.toFloat()
-      val plus = if (k < labels.size) textWidthDp("+${labels.size - k}".length, fontSp) else 0f
-      if (chips + plus <= availableDp) return k
+      if (tagGroupWidthDp(labels, k, fontSp, measure) <= availableDp) return k
     }
     return 0
   }
@@ -87,15 +100,15 @@ internal object WidgetMath {
     NONE,
   }
 
-  /** Placement of a task row's tag chips, plus how many list-name and requester chars fit on line 2. */
+  /** Placement of a task row's tag chips, plus the list name and requester as they fit on line 2. */
   data class RowLayout(
     val tags: Slot,
     /** Tag chips to draw (the rest collapse into "+N"). */
     val tagChips: Int,
-    /** Max characters of the list name on line 2. */
-    val listNameChars: Int,
-    /** Max characters of the requester on line 2. */
-    val requesterChars: Int,
+    /** List name to draw (ellipsized to its share of line 2), or null if absent. */
+    val listName: String?,
+    /** Requester to draw (ellipsized to its share of line 2), or null if absent. */
+    val requester: String?,
   )
 
   /** Gap between the parts of a row line, in dp. */
@@ -107,23 +120,25 @@ internal object WidgetMath {
    * Lays out line 2 of a task row (the due chip always sits right of the name on line 1, so it needs no math):
    * list name, requester and tag chips left-aligned, priority right-aligned. Priority keeps its room; the tags stay
    * on line 2 while the list name and requester still get [META_TEXT_MIN_DP] each, otherwise they drop to a line
-   * below. The two texts then share what is left ([shareRoom]). Widths are estimates in dp: [textWidthDp] is the
-   * text area between the check circle and the star; null widths = part absent. [requesterChromeDp] is the
-   * requester's color dot + gap, on top of [requesterWidthDp] (its text).
+   * below. The two texts then share what is left ([shareRoom]). Widths are in dp: [textWidthDp] is the text area
+   * between the check circle and the star; null = part absent. [requesterChromeDp] is the requester's color dot +
+   * gap, on top of its text. Text widths come from [measure].
    */
   fun rowLayout(
     textWidthDp: Float,
-    listNameWidthDp: Float?,
-    requesterWidthDp: Float?,
+    listName: String?,
+    requester: String?,
     priorityWidthDp: Float?,
     tagLabels: List<String>,
     chipSp: Float,
     metaSp: Float,
     requesterChromeDp: Float = 0f,
+    measure: TextMeasure = ESTIMATE,
   ): RowLayout {
     val left = textWidthDp - (priorityWidthDp?.let { it + PART_GAP_DP } ?: 0f)
-    val requesterFull = requesterWidthDp?.let { it + requesterChromeDp }
-    val texts = listOfNotNull(listNameWidthDp, requesterFull)
+    val listWidth = listName?.let { measure.widthDp(it, metaSp, false) }
+    val requesterWidth = requester?.let { measure.widthDp(it, metaSp, false) + requesterChromeDp }
+    val texts = listOfNotNull(listWidth, requesterWidth)
     fun gaps(parts: Int) = maxOf(0, parts - 1) * PART_GAP_DP
 
     val wanted = minOf(tagLabels.size, MAX_TAG_CHIPS)
@@ -132,18 +147,33 @@ internal object WidgetMath {
     val tagChips: Int
     when {
       tagLabels.isEmpty() -> { tags = Slot.NONE; tagChips = 0 }
-      fitTagChips(tagLabels, chipSp, left - textReserve - gaps(texts.size + 1)) == wanted -> {
+      fitTagChips(tagLabels, chipSp, left - textReserve - gaps(texts.size + 1), measure = measure) == wanted -> {
         tags = Slot.META_LINE
         tagChips = wanted
       }
-      else -> { tags = Slot.BELOW; tagChips = fitTagChips(tagLabels, chipSp, textWidthDp) }
+      else -> { tags = Slot.BELOW; tagChips = fitTagChips(tagLabels, chipSp, textWidthDp, measure = measure) }
     }
 
     val tagsOnLine = tags == Slot.META_LINE
-    val textRoom = left - (if (tagsOnLine) tagGroupWidthDp(tagLabels, tagChips, chipSp) else 0f) -
+    val textRoom = left - (if (tagsOnLine) tagGroupWidthDp(tagLabels, tagChips, chipSp, measure) else 0f) -
       gaps(texts.size + (if (tagsOnLine) 1 else 0))
-    val (listRoom, requesterRoom) = shareRoom(textRoom, listNameWidthDp ?: 0f, requesterFull ?: 0f)
-    return RowLayout(tags, tagChips, textChars(listRoom, metaSp), textChars(requesterRoom - requesterChromeDp, metaSp))
+    val (listRoom, requesterRoom) = shareRoom(textRoom, listWidth ?: 0f, requesterWidth ?: 0f)
+    return RowLayout(
+      tags,
+      tagChips,
+      listName?.let { fitText(it, listRoom, metaSp, measure) },
+      requester?.let { fitText(it, requesterRoom - requesterChromeDp, metaSp, measure) },
+    )
+  }
+
+  /** [text] whole if it fits [roomDp] at [sp], else the longest ellipsized prefix that does (never under [minChars]). */
+  fun fitText(text: String, roomDp: Float, sp: Float, measure: TextMeasure = ESTIMATE, minChars: Int = 6): String {
+    if (measure.widthDp(text, sp, false) <= roomDp) return text
+    for (max in text.length - 1 downTo minChars + 1) {
+      val cut = ellipsize(text, max)
+      if (measure.widthDp(cut, sp, false) <= roomDp) return cut
+    }
+    return ellipsize(text, minChars)
   }
 
   /**
@@ -162,15 +192,11 @@ internal object WidgetMath {
   }
 
   /** Width of [shown] tag chips of [labels] plus the "+N" counter for the rest. */
-  fun tagGroupWidthDp(labels: List<String>, shown: Int, fontSp: Float): Float {
-    val chips = labels.take(shown).sumOf { tagChipWidthDp(it, fontSp).toDouble() }.toFloat()
-    val plus = if (shown < labels.size) textWidthDp("+${labels.size - shown}".length, fontSp) else 0f
+  fun tagGroupWidthDp(labels: List<String>, shown: Int, fontSp: Float, measure: TextMeasure = ESTIMATE): Float {
+    val chips = labels.take(shown).sumOf { tagChipWidthDp(it, fontSp, measure).toDouble() }.toFloat()
+    val plus = if (shown < labels.size) measure.widthDp("+${labels.size - shown}", fontSp, true) else 0f
     return chips + plus
   }
-
-  /** Max characters of plain meta text that fit [availableDp] at [fontSp], clamped to [minChars]..[maxChars]. */
-  fun textChars(availableDp: Float, fontSp: Float, minChars: Int = 6, maxChars: Int = 24): Int =
-    (availableDp / (fontSp * GLYPH_EM)).toInt().coerceIn(minChars, maxChars)
 
   /**
    * Greedy wrap of chips with estimated [widths] into rows no wider than [availableDp] (a chip
