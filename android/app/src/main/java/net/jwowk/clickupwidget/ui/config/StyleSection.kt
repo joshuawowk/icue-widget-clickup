@@ -128,6 +128,7 @@ internal fun StyleSection(vm: ConfigViewModel) {
     SwitchRow(stringResource(R.string.ui_show_subtitle), config.showSubtitle, { v -> vm.update { it.copy(showSubtitle = v) } })
     SwitchRow(stringResource(R.string.ui_show_count), config.showCount, { v -> vm.update { it.copy(showCount = v) } })
     SwitchRow(stringResource(R.string.ui_show_list_name), config.showListName, { v -> vm.update { it.copy(showListName = v) } })
+    SwitchRow(stringResource(R.string.ui_show_requester), config.showRequester, { v -> vm.update { it.copy(showRequester = v) } })
     SwitchRow(stringResource(R.string.ui_show_due_chip), config.showDueChip, { v -> vm.update { it.copy(showDueChip = v) } })
     SwitchRow(stringResource(R.string.ui_show_priority_star), config.showPriorityStar, { v -> vm.update { it.copy(showPriorityStar = v) } })
     SwitchRow(stringResource(R.string.ui_show_priority), config.showPriority, { v -> vm.update { it.copy(showPriority = v) } })

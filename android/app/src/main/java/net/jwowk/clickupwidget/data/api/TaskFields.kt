@@ -49,6 +49,19 @@ fun taskFields(
   }
 }
 
+/** Custom field shown on each widget row (matched by name, ignoring case and surrounding spaces). */
+const val REQUESTER_FIELD = "Requester"
+
+/** (value, color) of the task's populated [REQUESTER_FIELD] custom field, or null when it has none. */
+fun requesterField(
+  task: JsonObject,
+  locale: Locale = Locale.getDefault(),
+  zone: ZoneId = ZoneId.systemDefault(),
+): Pair<String, String?>? = task.array("custom_fields").firstNotNullOfOrNull { f ->
+  val field = f.asObject()?.takeIf { it.str("name")?.trim().equals(REQUESTER_FIELD, ignoreCase = true) }
+  field?.let { customField(it, locale, zone) }
+}
+
 /** Weekday + month + day + year in [locale], e.g. "Thu, Oct 16, 2026" for en-US. */
 internal fun formatFieldDate(ms: Long, locale: Locale, zone: ZoneId): String {
   val formatter = try {

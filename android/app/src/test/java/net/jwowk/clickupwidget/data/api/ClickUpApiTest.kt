@@ -367,6 +367,27 @@ class ClickUpApiTest {
   }
 
   @Test
+  fun requester_readFromCustomFieldsOfTheTaskList() = runTest {
+    route(
+      "GET /team/9001/task",
+      """
+      {"tasks":[
+        {"id":"a","name":"A","custom_fields":[
+          {"type":"short_text","name":"Incident No.","value":"INC1"},
+          {"type":"drop_down","name":"Requester","value":1,"type_config":{"options":[
+            {"id":"o0","name":"Ann","color":"#111111","orderindex":0},{"id":"o1","name":"Bob","color":"#222222","orderindex":1}]}}]},
+        {"id":"b","name":"B","custom_fields":[{"type":"drop_down","name":"Requester","type_config":{"options":[]}}]},
+        {"id":"c","name":"C"}]}
+      """.trimIndent(),
+    )
+    val (a, b, c) = api().fetchTasks(WidgetConfig()).tasks
+    assertEquals("Bob", a.requester)
+    assertEquals("#222222", a.requesterColorHex)
+    assertTrue(b.requester == null && b.requesterColorHex == null)
+    assertTrue(c.requester == null && c.requesterColorHex == null)
+  }
+
+  @Test
   fun taskDetail_includesFormattedFields() = runTest {
     route(
       "GET /task/p1",

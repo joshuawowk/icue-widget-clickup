@@ -143,4 +143,16 @@ class DemoTaskRepositoryTest {
     assertTrue(repo.taskDetail(tasks.first { it.id == "demo-8" }).fields.isEmpty())
     assertTrue(tasks.count { t -> repo.taskDetail(t).fields.isNotEmpty() } in 2..4)
   }
+
+  @Test
+  fun demoRequesters_matchTheDetailSheet() = runTest {
+    val repo = DemoTaskRepository(now)
+    val withRequester = DemoTaskRepository.sampleTasks(now).filter { it.requester != null }
+    assertTrue(withRequester.size >= 2)
+    withRequester.forEach { t ->
+      val field = repo.taskDetail(t).fields.single { it.name == "Requester" }
+      assertEquals(field.value, t.requester)
+      assertEquals(field.colorHex, t.requesterColorHex)
+    }
+  }
 }

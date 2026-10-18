@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import androidx.annotation.DrawableRes
@@ -67,8 +68,28 @@ import java.io.File
 /** Which widget is rendering and whether clicks are live (false for previews). */
 internal data class WidgetEnv(val appWidgetId: Int, val interactive: Boolean)
 
-/** Per-composition sizing derived from config + LocalSize. */
-private class Dims(config: WidgetConfig, widthDp: Float, heightDp: Float) {
+/**
+ * Measures with the platform default font, which the widget's text views use. [SLACK] keeps a margin for
+ * launchers/OEM fonts that render a little wider; an underestimate would clip the last part of a row line.
+ */
+private class PaintMeasure(private val fontScale: Float) : WidgetMath.TextMeasure {
+  private val regular = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT }
+  private val bold = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD }
+
+  override fun widthDp(text: String, sp: Float, bold: Boolean): Float {
+    val paint = if (bold) this.bold else regular
+    // Text size in dp units (sp × font scale), so measureText answers in dp too.
+    paint.textSize = sp * fontScale
+    return paint.measureText(text) * SLACK
+  }
+
+  companion object {
+    const val SLACK = 1.05f
+  }
+}
+
+/** Per-composition sizing derived from config + LocalSize (+ the system font scale, for text measurement). */
+private class Dims(config: WidgetConfig, widthDp: Float, heightDp: Float, fontScale: Float) {
   val bp = WidgetMath.breakpoints(widthDp, heightDp)
   val scale = WidgetMath.textScale(config.textScale, bp.narrow)
   val title = 18f * scale
@@ -82,9 +103,11 @@ private class Dims(config: WidgetConfig, widthDp: Float, heightDp: Float) {
   val contentWidth = widthDp - 2 * pad.value
   val showStar = config.showPriorityStar && !bp.narrow
   val showListName = config.showListName && !bp.narrow
+  val showRequester = config.showRequester && !bp.narrow
   val showSubtitle = config.showSubtitle && !bp.short
   /** Estimated width of a row's text column: content minus check circle (+ gap), star (+ gap) and slack. */
   val textWidth = contentWidth - circle.value - 10f - (if (showStar) 6f + 16f * scale else 0f) - 4f
+  val measure: WidgetMath.TextMeasure = PaintMeasure(fontScale)
 }
 
 private fun GlanceModifier.clickIf(env: WidgetEnv, action: () -> Action): GlanceModifier =
@@ -115,7 +138,7 @@ internal fun WidgetRoot(state: WidgetState, env: WidgetEnv) {
   val config = state.configOrDefault
   val colors = widgetColors(config)
   val size = LocalSize.current
-  val dims = Dims(config, size.width.value, size.height.value)
+  val dims = Dims(config, size.width.value, size.height.value, LocalContext.current.resources.configuration.fontScale)
   val corner = if (Build.VERSION.SDK_INT >= 31) {
     GlanceModifier.cornerRadius(android.R.dimen.system_app_widget_background_radius)
   } else {
@@ -519,23 +542,23 @@ private fun TaskRowView(
       }
       Column(modifier = GlanceModifier.defaultWeight()) {
         val listName = task.listName.takeIf { dims.showListName && it.isNotBlank() }
+        val requester = task.requester?.takeIf { dims.showRequester && it.isNotBlank() }
         val due = row.due.takeIf { config.showDueChip }
         val prio = task.priority.takeIf { config.showPriority && it != Priority.NONE }
         val tagLabels = task.tags.takeIf { config.showTags && !dims.bp.narrow }.orEmpty().map { WidgetMath.tagLabel(it) }
         val icon = dims.meta * 0.95f
-        // Use the empty space right of the text: due beside the name, priority/tags right on the list-name line.
+        // Line 1: name, due right. Line 2: list name, requester, tags left; priority right (under the due date).
         val layout = WidgetMath.rowLayout(
           textWidthDp = dims.textWidth,
-          listNameWidthDp = listName?.let { WidgetMath.textWidthDp(it.length, dims.meta) },
-          dueWidthDp = due?.let { icon + 3f + WidgetMath.textWidthDp(it.label.length, dims.meta) * BOLD_WIDTH },
-          priorityWidthDp = prio?.let {
-            icon + if (dims.bp.narrow) 0f else 3f + WidgetMath.textWidthDp(it.label.length, dims.meta) * BOLD_WIDTH
-          },
+          listName = listName,
+          requester = requester,
+          priorityWidthDp = prio?.let { icon + if (dims.bp.narrow) 0f else 3f + dims.measure.widthDp(it.label, dims.meta, true) },
           tagLabels = tagLabels,
           chipSp = dims.chip,
           metaSp = dims.meta,
+          requesterChromeDp = icon + 3f,
+          measure = dims.measure,
         )
-        val at = { slot: WidgetMath.Slot, part: WidgetMath.Slot -> slot == part }
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
           Text(
             task.name,
@@ -543,48 +566,32 @@ private fun TaskRowView(
             style = style(if (inFlight) colors.muted else colors.text, dims.task, strike = inFlight),
             maxLines = 2,
           )
-          if (due != null && at(layout.due, WidgetMath.Slot.NAME_LINE)) {
+          if (due != null) {
             Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
             DuePart(due, colors, dims, modifier = GlanceModifier.padding(top = ((dims.task - dims.meta) / 2f).dp))
           }
         }
-        val dueMeta = due != null && at(layout.due, WidgetMath.Slot.META_LINE)
-        val prioMeta = prio != null && at(layout.priority, WidgetMath.Slot.META_LINE)
-        val tagsMeta = at(layout.tags, WidgetMath.Slot.META_LINE)
-        if (listName != null || dueMeta || prioMeta || tagsMeta) {
+        val tagsMeta = layout.tags == WidgetMath.Slot.META_LINE
+        if (listName != null || requester != null || prio != null || tagsMeta) {
           Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            if (listName != null) {
-              Text(
-                WidgetMath.ellipsize(listName, layout.listNameChars),
-                modifier = GlanceModifier.defaultWeight(),
-                style = style(colors.muted, dims.meta),
-                maxLines = 1,
-              )
-            } else {
-              Spacer(GlanceModifier.defaultWeight())
+            // Weighted, so a width misestimate clips the left parts instead of pushing priority off the row.
+            Row(modifier = GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
+              if (layout.listName != null) {
+                Text(layout.listName, style = style(colors.muted, dims.meta), maxLines = 1)
+              }
+              if (layout.requester != null) {
+                if (layout.listName != null) Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
+                RequesterPart(layout.requester, task.requesterColorHex, colors, dims)
+              }
+              if (tagsMeta) {
+                if (listName != null || requester != null) Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
+                TagChips(task, tagLabels, layout.tagChips, colors, dims)
+              }
             }
-            if (dueMeta) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); DuePart(due, colors, dims) }
-            if (prioMeta) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); PriorityPart(prio, colors, dims) }
-            if (tagsMeta) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); TagChips(task, tagLabels, layout.tagChips, colors, dims) }
+            if (prio != null) { Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp)); PriorityPart(prio, colors, dims) }
           }
         }
-        val dueBelow = due != null && at(layout.due, WidgetMath.Slot.BELOW)
-        val prioBelow = prio != null && at(layout.priority, WidgetMath.Slot.BELOW)
-        val tagsBelow = at(layout.tags, WidgetMath.Slot.BELOW) && layout.tagChips > 0
-        if (dueBelow || prioBelow) {
-          Row(modifier = GlanceModifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (dueBelow) DuePart(due, colors, dims)
-            if (prioBelow) {
-              if (dueBelow) Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
-              PriorityPart(prio, colors, dims)
-            }
-            if (tagsBelow && layout.tagsInlineBelow) {
-              Spacer(GlanceModifier.width(WidgetMath.PART_GAP_DP.dp))
-              TagChips(task, tagLabels, layout.tagChips, colors, dims)
-            }
-          }
-        }
-        if (tagsBelow && !layout.tagsInlineBelow) {
+        if (layout.tags == WidgetMath.Slot.BELOW && layout.tagChips > 0) {
           Box(GlanceModifier.padding(top = 2.dp)) { TagChips(task, tagLabels, layout.tagChips, colors, dims) }
         }
       }
@@ -601,9 +608,6 @@ private fun TaskRowView(
   }
 }
 
-/** Bold meta text runs a little wider than the plain glyph estimate. */
-private const val BOLD_WIDTH = 1.05f
-
 /** Calendar icon + due label in its urgency color. */
 @Composable
 private fun DuePart(due: DueInfo, colors: WidgetColors, dims: Dims, modifier: GlanceModifier = GlanceModifier) {
@@ -617,6 +621,17 @@ private fun DuePart(due: DueInfo, colors: WidgetColors, dims: Dims, modifier: Gl
     Icon(R.drawable.ic_w_calendar, color, (dims.meta * 0.95f).dp)
     Spacer(GlanceModifier.width(3.dp))
     Text(due.label, style = style(color, dims.meta, bold = true), maxLines = 1)
+  }
+}
+
+/** Dot in the requester's drop-down color (as on the details sheet), then the name in muted text. */
+@Composable
+private fun RequesterPart(name: String, colorHex: String?, colors: WidgetColors, dims: Dims) {
+  val dot = colorHex?.let { ColorProvider(Color(TaskLogic.parseColor(it))) } ?: colors.muted
+  Row(verticalAlignment = Alignment.CenterVertically) {
+    Icon(R.drawable.ic_w_dot, dot, (dims.meta * 0.95f).dp)
+    Spacer(GlanceModifier.width(3.dp))
+    Text(name, style = style(colors.muted, dims.meta), maxLines = 1)
   }
 }
 

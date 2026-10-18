@@ -389,6 +389,7 @@ class ClickUpApi(
       val status = o["status"].asObject()
       val priority = o["priority"].asObject()
       val tags = o.array("tags")
+      val requester = requesterField(o)
       return TaskItem(
         id = id,
         name = o.str("name")?.takeIf { it.isNotBlank() } ?: UNTITLED,
@@ -406,6 +407,8 @@ class ClickUpApi(
           val name = tag.str("name") ?: return@mapNotNull null
           tag.str("tag_bg")?.takeIf { it.isNotBlank() }?.let { name to it }
         }.toMap(),
+        requester = requester?.first?.trim()?.takeIf { it.isNotEmpty() },
+        requesterColorHex = requester?.second,
         url = o.str("url"),
         parentId = o.str("parent"),
         teamId = o.str("team_id") ?: inherit?.teamId,
