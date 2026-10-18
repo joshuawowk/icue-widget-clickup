@@ -603,40 +603,47 @@
         circle.className = 'check-circle';
         circle.title = 'Mark complete';
 
+        // Two lines that use the space right of the text (CSS wraps whatever doesn't fit):
+        //   line 1: name ............ due      line 2: list name ...... priority · tags
         const main = document.createElement('div');
         main.className = 'task-main';
+        const line1 = document.createElement('div');
+        line1.className = 'task-line1';
         const name = document.createElement('div');
         name.className = 'task-name';
         name.textContent = t.name;
-        const meta = document.createElement('div');
-        meta.className = 'task-meta';
-        if (t.listName) {
-          const ln = document.createElement('span');
-          ln.className = 'task-list-name';
-          ln.textContent = t.listName;
-          meta.appendChild(ln);
-        }
+        line1.appendChild(name);
         if (t.due) {
           const chip = document.createElement('span');
           chip.className = 'due-chip due-' + t.due.cls;
           chip.textContent = t.due.label;
-          meta.appendChild(chip);
+          line1.appendChild(chip);
         }
-        if (t.prio) meta.appendChild(makePrioLabel(t.prio));
-        main.appendChild(name);
-        main.appendChild(meta);
-        // Tags get their own line so a long list/due/priority row never pushes them off-screen.
+        main.appendChild(line1);
+
+        const trail = document.createElement('div');
+        trail.className = 'task-trail';
+        if (t.prio) trail.appendChild(makePrioLabel(t.prio));
         if (t.tags.length) {
-          const tagLine = document.createElement('div');
-          tagLine.className = 'task-tags';
-          t.tags.slice(0, ROW_TAG_LIMIT).forEach(tag => tagLine.appendChild(makeTagChip(tag)));
+          t.tags.slice(0, ROW_TAG_LIMIT).forEach(tag => trail.appendChild(makeTagChip(tag)));
           if (t.tags.length > ROW_TAG_LIMIT) {
             const more = document.createElement('span');
             more.className = 'tag-more';
             more.textContent = '+' + (t.tags.length - ROW_TAG_LIMIT);
-            tagLine.appendChild(more);
+            trail.appendChild(more);
           }
-          main.appendChild(tagLine);
+        }
+        if (t.listName || trail.childNodes.length) {
+          const meta = document.createElement('div');
+          meta.className = 'task-meta';
+          if (t.listName) {
+            const ln = document.createElement('span');
+            ln.className = 'task-list-name';
+            ln.textContent = t.listName;
+            meta.appendChild(ln);
+          }
+          if (trail.childNodes.length) meta.appendChild(trail);
+          main.appendChild(meta);
         }
 
         const star = document.createElement('span');

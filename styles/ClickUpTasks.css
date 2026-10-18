@@ -316,29 +316,59 @@ body {
   flex: 1 1 auto;
   min-width: 0;
 }
+/* Line 1: name with the due chip right-aligned beside it. The name keeps >= ~55% of the row;
+   when the chip would squeeze it further the chip wraps (still right-aligned) onto its own line. */
+.task-line1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: calc(var(--layout-unit) * 2);
+}
 .task-name {
+  flex: 1 1 0;
+  min-width: 55%;
   font-size: var(--font-task);
   font-weight: 500;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
+.task-line1 .due-chip {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--font-meta);
+}
+/* Line 2: list name, with priority + tags right-aligned; the group wraps below when it doesn't fit. */
 .task-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: calc(var(--layout-unit) * 2);
+  gap: calc(var(--layout-unit) * 0.8) calc(var(--layout-unit) * 2);
   margin-top: calc(var(--layout-unit) * 0.7);
   font-size: var(--font-meta);
   opacity: 0.85;
 }
 .task-list-name {
+  flex: 1 1 auto;
+  min-width: calc(var(--layout-unit) * 10);
   opacity: 0.55;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
 }
-.task-meta .due-chip, .task-meta .prio-label { flex: 0 0 auto; }
+.task-trail {
+  flex: 0 0 auto;
+  max-width: 100%;
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: calc(var(--layout-unit) * 1) calc(var(--layout-unit) * 1.2);
+}
+.task-trail .prio-label { flex: 0 0 auto; margin-right: calc(var(--layout-unit) * 0.8); }
 
 /* Priority: small flag + label, colored inline from the ClickUp priority color */
 .prio-label {
@@ -357,14 +387,7 @@ body {
   mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.4 6 14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>') center / contain no-repeat;
 }
 
-/* Tags: second meta line; chips wrap instead of overflowing */
-.task-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(var(--layout-unit) * 1) calc(var(--layout-unit) * 1.2);
-  margin-top: calc(var(--layout-unit) * 0.9);
-}
+/* Tags: chips in the right-aligned trail of line 2 */
 .tag-chip {
   --tag-font: calc(var(--layout-unit) * 2.6);
   display: inline-block;
