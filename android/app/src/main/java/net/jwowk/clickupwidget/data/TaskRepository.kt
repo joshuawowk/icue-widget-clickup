@@ -4,6 +4,7 @@ import net.jwowk.clickupwidget.data.model.AccountInfo
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.RequesterField
 import net.jwowk.clickupwidget.data.model.TaskDetail
 import net.jwowk.clickupwidget.data.model.TaskFetch
 import net.jwowk.clickupwidget.data.model.TaskItem
@@ -56,6 +57,9 @@ interface TaskRepository {
 
   /** PUT /task/{id} {"priority": 1..4} — or {"priority": null} for [Priority.NONE]. */
   suspend fun setPriority(taskId: String, priority: Priority)
+
+  /** The list's "Requester" drop-down (GET /list/{id}/field), or null when the list has no such field. */
+  suspend fun requesterField(listId: String): RequesterField?
 
   /** POST /list/{listId}/task; returns the created task (shaped like fetchTasks' items). */
   suspend fun createTask(task: NewTask): TaskItem

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -107,6 +109,7 @@ internal fun NewTaskScreen(vm: NewTaskViewModel, onDismiss: () -> Unit) {
 private fun SheetContent(vm: NewTaskViewModel, onDismiss: () -> Unit) {
   var showListPicker by rememberSaveable { mutableStateOf(false) }
   var showDatePicker by rememberSaveable { mutableStateOf(false) }
+  var showRequesterPicker by rememberSaveable { mutableStateOf(false) }
   val nameFocus = remember { FocusRequester() }
   LaunchedEffect(Unit) { runCatching { nameFocus.requestFocus() } }
 
@@ -150,6 +153,8 @@ private fun SheetContent(vm: NewTaskViewModel, onDismiss: () -> Unit) {
     ListRow(vm, onChange = { showListPicker = true })
 
     if (vm.list != null) StatusSection(vm)
+
+    if (vm.list != null) RequesterSection(vm, onChoose = { showRequesterPicker = true })
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
       FieldLabel(stringResource(R.string.newtask_due))
@@ -225,6 +230,18 @@ private fun SheetContent(vm: NewTaskViewModel, onDismiss: () -> Unit) {
         showListPicker = false
       },
       onDismiss = { showListPicker = false },
+    )
+  }
+  val requesterField = vm.requesterField
+  if (showRequesterPicker && requesterField != null) {
+    RequesterPickerDialog(
+      options = requesterField.options,
+      selected = vm.requester,
+      onPick = { choice ->
+        vm.chooseRequester(choice)
+        showRequesterPicker = false
+      },
+      onDismiss = { showRequesterPicker = false },
     )
   }
   if (showDatePicker) {
@@ -321,6 +338,67 @@ private fun StatusSection(vm: NewTaskViewModel) {
     if (vm.hiddenByFilter) {
       Text(
         stringResource(R.string.newtask_status_hidden),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+  }
+}
+
+/**
+ * The list's Requester drop-down, shown only when the list has one (or loading it failed): the chosen person with a
+ * clear button and Choose / Change. A new name explains how it is saved, since ClickUp can't add the option.
+ */
+@Composable
+private fun RequesterSection(vm: NewTaskViewModel, onChoose: () -> Unit) {
+  val field = vm.requesterField
+  if (field == null && !vm.requesterFailed) return
+  val choice = vm.requester
+  Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Column(Modifier.weight(1f)) {
+        FieldLabel(stringResource(R.string.newtask_requester))
+        when {
+          field == null -> Text(
+            stringResource(R.string.newtask_requester_failed),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          choice == null -> Text(
+            stringResource(R.string.newtask_requester_none),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          else -> Row(verticalAlignment = Alignment.CenterVertically) {
+            if (choice is RequesterChoice.Existing) {
+              OptionDot(choice.option.colorHex)
+              Spacer(Modifier.width(8.dp))
+            }
+            Text(choice.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+        }
+      }
+      if (field == null) {
+        TextButton(onClick = vm::retryRequesterField, enabled = !vm.busy && !vm.requesterLoading) {
+          Text(stringResource(R.string.ui_retry))
+        }
+      } else {
+        if (choice != null) {
+          IconButton(onClick = { vm.chooseRequester(null) }, enabled = !vm.busy) {
+            Icon(painterResource(R.drawable.ic_ui_close), stringResource(R.string.newtask_requester_clear))
+          }
+        }
+        TextButton(onClick = onChoose, enabled = !vm.busy && !vm.requesterLoading) {
+          Text(stringResource(if (choice == null) R.string.newtask_requester_choose else R.string.newtask_requester_change))
+        }
+      }
+    }
+    if (choice is RequesterChoice.New && field != null) {
+      val line = NewTaskLogic.requesterLine(choice.name)
+      val other = NewTaskLogic.otherOption(field)
+      Text(
+        if (other != null) stringResource(R.string.newtask_requester_new_other, other.name, line)
+        else stringResource(R.string.newtask_requester_new_plain, line),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )

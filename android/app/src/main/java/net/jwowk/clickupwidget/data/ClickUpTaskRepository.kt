@@ -7,6 +7,7 @@ import net.jwowk.clickupwidget.data.model.AccountInfo
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.RequesterField
 import net.jwowk.clickupwidget.data.model.TaskDetail
 import net.jwowk.clickupwidget.data.model.TaskFetch
 import net.jwowk.clickupwidget.data.model.TaskItem
@@ -48,6 +49,7 @@ class ClickUpTaskRepository(context: Context, private val tokenStore: TokenStore
   override suspend fun completeTask(taskId: String, listId: String) = api().completeTask(taskId, listId)
   override suspend fun setStatus(taskId: String, status: String) = api().setStatus(taskId, status)
   override suspend fun setPriority(taskId: String, priority: Priority) = api().setPriority(taskId, priority)
+  override suspend fun requesterField(listId: String): RequesterField? = api().requesterField(listId)
   override suspend fun createTask(task: NewTask): TaskItem = api().createTask(task)
 
   private companion object {

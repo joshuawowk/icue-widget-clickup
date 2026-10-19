@@ -155,4 +155,20 @@ class DemoTaskRepositoryTest {
       assertEquals(field.colorHex, t.requesterColorHex)
     }
   }
+
+  @Test
+  fun createTask_withRequesterOption() = runTest {
+    val repo = DemoTaskRepository(now)
+    val field = repo.requesterField("demo-list-operations")!!
+    assertTrue(field.options.any { it.name == "Other" })
+    val becky = field.options.single { it.name == "Becky Puleo" }
+    val created = repo.createTask(
+      NewTask(listId = "demo-list-operations", name = "Badge printer", description = "Jams", customFields = mapOf(field.id to becky.id)),
+    )
+    assertEquals("Becky Puleo", created.requester)
+    assertEquals(becky.colorHex, created.requesterColorHex)
+    val detail = repo.taskDetail(created)
+    assertEquals("Jams", detail.description)
+    assertEquals(listOf("Becky Puleo"), detail.fields.filter { it.name == "Requester" }.map { it.value })
+  }
 }

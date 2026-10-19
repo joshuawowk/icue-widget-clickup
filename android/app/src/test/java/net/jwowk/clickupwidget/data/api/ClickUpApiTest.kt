@@ -5,6 +5,8 @@ import net.jwowk.clickupwidget.data.model.ClickUpApiException
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.NoTokenException
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.RequesterField
+import net.jwowk.clickupwidget.data.model.RequesterOption
 import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskItem
 import net.jwowk.clickupwidget.data.model.WidgetConfig
@@ -533,6 +535,44 @@ class ClickUpApiTest {
       api().createTask(NewTask(listId = "77", name = "X", assignToMe = false))
       fail("expected exception")
     } catch (_: java.io.IOException) {
+    }
+  }
+
+  @Test
+  fun createTask_sendsCustomFields() = runTest {
+    route("POST /list/77/task", """{"id":"new5","name":"R"}""")
+    api().createTask(NewTask(listId = "77", name = "R", assignToMe = false, customFields = mapOf("req-field" to "opt-uuid")))
+    assertEquals(
+      """{"name":"R","custom_fields":[{"id":"req-field","value":"opt-uuid"}]}""",
+      requests("/list/77/task").single().body.readUtf8(),
+    )
+  }
+
+  @Test
+  fun requesterField_readsTheListsFieldsEveryTime() = runTest {
+    route(
+      "GET /list/77/field",
+      """
+      {"fields":[{"id":"inc","name":"Incident No.","type":"short_text","type_config":{}},
+        {"id":"req","name":"Requester","type":"drop_down","type_config":{"sorting":"name_asc","options":[
+          {"id":"b","name":"Becky Puleo","color":"#800000","orderindex":0},{"id":"a","name":"Ariana Carlone","orderindex":1}]}}]}
+      """.trimIndent(),
+    )
+    val api = api()
+    val expected = RequesterField("req", listOf(RequesterOption("a", "Ariana Carlone"), RequesterOption("b", "Becky Puleo", "#800000")))
+    assertEquals(expected, api.requesterField("77"))
+    assertEquals(expected, api.requesterField("77"))
+    assertEquals(2, requests("/list/77/field").size)
+    assertEquals("pk_test", requests("/list/77/field").first().getHeader("Authorization"))
+
+    route("GET /list/78/field", """{"fields":[]}""")
+    assertNull(api.requesterField("78"))
+    route("GET /list/79/field", "{}", code = 404)
+    try {
+      api.requesterField("79")
+      fail("expected exception")
+    } catch (e: ClickUpApiException) {
+      assertEquals(404, e.code)
     }
   }
 

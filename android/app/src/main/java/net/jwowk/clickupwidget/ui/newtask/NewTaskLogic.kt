@@ -7,15 +7,30 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import net.jwowk.clickupwidget.data.TaskLogic
+import net.jwowk.clickupwidget.data.api.REQUESTER_FIELD
 import net.jwowk.clickupwidget.data.model.AppSettings
 import net.jwowk.clickupwidget.data.model.ClickUpApiException
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NoTokenException
+import net.jwowk.clickupwidget.data.model.RequesterField
+import net.jwowk.clickupwidget.data.model.RequesterOption
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 
 /** The due-date chips on the New task sheet. */
 internal enum class DueChoice { NONE, TODAY, TOMORROW, PICK }
+
+/** The requester picked on the New task sheet: an option of the list's Requester drop-down, or a new name. */
+internal sealed interface RequesterChoice {
+  val name: String
+
+  data class Existing(val option: RequesterOption) : RequesterChoice {
+    override val name: String get() = option.name
+  }
+
+  /** Not a drop-down option (ClickUp's API can't add one): saved as the "Other" option plus a description line. */
+  data class New(override val name: String) : RequesterChoice
+}
 
 /** Why creating a task failed, for the inline error. */
 internal enum class NewTaskError { INVALID_TOKEN, LIST_NOT_FOUND, NETWORK, SERVER, UNKNOWN }
@@ -91,6 +106,62 @@ internal object NewTaskLogic {
   }
 
   private fun isDoneType(type: String) = type == "done" || type == "closed"
+
+  /** The drop-down option a new requester is filed under, when the field has one. */
+  private const val OTHER_OPTION = "Other"
+
+  /** A typed name, trimmed, with runs of whitespace collapsed. */
+  fun cleanName(raw: String): String = raw.trim().replace(Regex("\\s+"), " ")
+
+  /** Options whose name contains [query]; all of them for a blank query. */
+  fun filterRequesters(options: List<RequesterOption>, query: String): List<RequesterOption> {
+    val q = cleanName(query)
+    return if (q.isEmpty()) options else options.filter { it.name.contains(q, ignoreCase = true) }
+  }
+
+  /** [query] as a new requester to offer, or null when it is blank or already an option (any case). */
+  fun newRequesterName(options: List<RequesterOption>, query: String): String? =
+    cleanName(query).takeIf { q -> q.isNotEmpty() && options.none { it.name.equals(q, ignoreCase = true) } }
+
+  /** The field's "Other" option (any case), if it has one. */
+  fun otherOption(field: RequesterField?): RequesterOption? =
+    field?.options?.firstOrNull { it.name.trim().equals(OTHER_OPTION, ignoreCase = true) }
+
+  /**
+   * The choice kept when the field (re)loads, e.g. for another list: an option only if this field still has it,
+   * a new name always — or as the option when ClickUp has one by that name now. Nothing when there is no field.
+   */
+  fun carryRequester(choice: RequesterChoice?, field: RequesterField?): RequesterChoice? {
+    if (field == null) return null
+    return when (choice) {
+      is RequesterChoice.Existing -> field.options.firstOrNull { it.id == choice.option.id }?.let(RequesterChoice::Existing)
+      is RequesterChoice.New ->
+        field.options.firstOrNull { it.name.equals(choice.name, ignoreCase = true) }?.let(RequesterChoice::Existing) ?: choice
+      null -> null
+    }
+  }
+
+  /** `custom_fields` for the create request: the chosen option; for a new name the "Other" option (if any). */
+  fun requesterFields(field: RequesterField?, choice: RequesterChoice?): Map<String, String> {
+    if (field == null) return emptyMap()
+    val option = when (choice) {
+      is RequesterChoice.Existing -> choice.option
+      is RequesterChoice.New -> otherOption(field)
+      null -> null
+    } ?: return emptyMap()
+    return mapOf(field.id to option.id)
+  }
+
+  /** The description line that records a new requester, e.g. "Requester: Jane Doe". */
+  fun requesterLine(name: String): String = "$REQUESTER_FIELD: $name"
+
+  /** The description sent: a new requester's [requesterLine] first, as the drop-down can't hold the name. */
+  fun descriptionWith(description: String, choice: RequesterChoice?): String {
+    val body = description.trim()
+    if (choice !is RequesterChoice.New) return body
+    val line = requesterLine(choice.name)
+    return if (body.isEmpty()) line else "$line\n\n$body"
+  }
 
   fun errorFor(t: Throwable): NewTaskError = when {
     t is NoTokenException -> NewTaskError.INVALID_TOKEN

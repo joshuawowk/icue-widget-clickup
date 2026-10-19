@@ -7,6 +7,8 @@ import net.jwowk.clickupwidget.data.api.formatFieldDate
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.RequesterField
+import net.jwowk.clickupwidget.data.model.RequesterOption
 import net.jwowk.clickupwidget.data.model.TaskDetail
 import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskFetch
@@ -30,6 +32,8 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
   private var createdCount = 0
   /** Ids of tasks created with assignToMe = false: visible in list mode only, like in ClickUp. */
   private val notMine = mutableSetOf<String>()
+  /** Description and fields of tasks created in demo mode, for their detail sheet. */
+  private val createdDetails = mutableMapOf<String, Pair<String, List<TaskField>>>()
   private val tasks: MutableList<TaskItem> = sampleTasks(nowMs).toMutableList()
   private val subtasks: MutableMap<String, MutableList<TaskItem>> =
     sampleSubtasks(tasks).mapValues { it.value.toMutableList() }.toMutableMap()
@@ -52,6 +56,7 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
 
   override suspend fun taskDetail(task: TaskItem): TaskDetail = mutex.withLock {
     val current = tasks.firstOrNull { it.id == task.id } ?: subtasks.values.flatten().firstOrNull { it.id == task.id } ?: task
+    createdDetails[task.id]?.let { (description, fields) -> return@withLock TaskDetail(current, description, emptyList(), fields) }
     TaskDetail(current, DESCRIPTIONS[task.id].orEmpty(), subtasks[task.id].orEmpty().toList(), sampleFields(task.id, now))
   }
 
@@ -87,6 +92,8 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
     }
   }
 
+  override suspend fun requesterField(listId: String): RequesterField? = DEMO_REQUESTER_FIELD
+
   override suspend fun createTask(task: NewTask): TaskItem {
     val name = task.name.trim()
     require(name.isNotEmpty()) { "Task name must not be blank" }
@@ -94,6 +101,7 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
       val id = "demo-new-${++createdCount}"
       val list = LISTS.firstOrNull { it.id == task.listId }
       val status = task.status?.let { s -> STATUSES.firstOrNull { TaskLogic.normStatus(it.name) == TaskLogic.normStatus(s) } } ?: TO_DO
+      val requester = task.customFields[DEMO_REQUESTER_FIELD.id]?.let { v -> DEMO_REQUESTER_FIELD.options.firstOrNull { it.id == v } }
       val created = TaskItem(
         id = id,
         name = name,
@@ -105,8 +113,11 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
         status = status.name,
         statusColorHex = status.colorHex,
         statusType = status.type,
+        requester = requester?.name,
+        requesterColorHex = requester?.colorHex,
       )
       tasks.add(0, created)
+      createdDetails[id] = task.description to listOfNotNull(requester?.let { TaskField("Requester", it.name, it.colorHex) })
       if (!task.assignToMe) notMine += id
       created
     }
@@ -187,6 +198,13 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
       "Ariana Carlone" to "#9b59b6",
       "Becky Puleo" to "#800000",
       "Dana Reyes" to "#1abc9c",
+      "Other" to "#b5bcc2",
+    )
+
+    /** Every demo list has the Requester drop-down (options by name, like a name_asc field). */
+    private val DEMO_REQUESTER_FIELD = RequesterField(
+      "demo-requester",
+      REQUESTER_COLORS.entries.mapIndexed { i, (name, color) -> RequesterOption("demo-requester-$i", name, color) },
     )
 
     /** Read-only populated fields for a few demo tasks (what the live API's custom fields would give). */

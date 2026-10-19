@@ -33,7 +33,8 @@ LISTS = {"L1": "Engineering", "L2": "Ops", "L3": "Inbox"}
 PRIO = {"urgent": "#f50000", "high": "#ffcc00", "normal": "#6fddff", "low": "#d8d8d8"}
 PRIO_BY_ID = {1: "urgent", 2: "high", 3: "normal", 4: "low"}
 TAG_COLORS = {"finance": "#0f5096", "bug": "#e50000", "planning": "#1b9e77", "security": "#7b2cbf", "meeting": "#0f5096"}
-REQUESTERS = [("Ariana Carlone", "#9b59b6"), ("Becky Puleo", "#800000"), ("Dana Reyes", "#1abc9c")]
+REQUESTERS = [("Ariana Carlone", "#9b59b6"), ("Becky Puleo", "#800000"), ("Dana Reyes", "#1abc9c"), ("Other", "#b5bcc2")]
+REQUESTER_LISTS = ("L1", "L2")  # L3 (Inbox) has no Requester field
 PAGE = 100
 DAY = 86_400_000
 
@@ -90,12 +91,16 @@ def seed():
 TASKS = seed()
 
 
+def requester_field():
+    return {"id": "cf-req", "name": "Requester", "type": "drop_down",
+            "type_config": {"sorting": "name_asc", "options": [{"id": f"opt{i}", "name": n, "color": c, "orderindex": i}
+                                                               for i, (n, c) in enumerate(REQUESTERS)]}}
+
+
 def custom_fields(t):
     f = t.get("fields") or {}
     return [
-        {"id": "cf-req", "name": "Requester", "type": "drop_down", "value": f.get("requester"),
-         "type_config": {"options": [{"id": f"opt{i}", "name": n, "color": c, "orderindex": i}
-                                     for i, (n, c) in enumerate(REQUESTERS)]}},
+        dict(requester_field(), value=f.get("requester")),
         {"id": "cf-inc", "name": "Incident No.", "type": "short_text", "value": f.get("incident"), "type_config": {}},
         {"id": "cf-done", "name": "Done Date", "type": "date", "value": f.get("done_date"), "type_config": {}},
         {"id": "cf-epi", "name": "Epicor Task No", "type": "number", "value": f.get("epicor"),
@@ -206,12 +211,17 @@ class Handler(BaseHTTPRequestHandler):
                     want = str(body.get("status") or "").lower()
                     names = [st[0] for st in STATUSES[parts[1]]]
                     status = next((n for n in names if n.lower() == want), names[0])
+                    cf = {c.get("id"): c.get("value") for c in body.get("custom_fields") or []}
+                    opt_ids = [o["id"] for o in requester_field()["type_config"]["options"]]
+                    if "cf-req" in cf and (parts[1] not in REQUESTER_LISTS or cf["cf-req"] not in opt_ids):
+                        return self.send(400, {"err": "Value is not a valid option", "ECODE": "FIELD_015"})
                     TASKS[tid] = {
                         "id": tid, "name": body["name"], "list_id": parts[1], "status": status,
                         "due_date": None if body.get("due_date") is None else str(body["due_date"]),
                         "priority": None if prio is None else {"id": "1", "priority": prio, "color": PRIO[prio]},
                         "tags": [], "parent": None, "text_content": body.get("description", ""),
-                        "created": int(time.time() * 1000), "fields": {},
+                        "created": int(time.time() * 1000),
+                        "fields": {"requester": opt_ids.index(cf["cf-req"]) if "cf-req" in cf else None},
                         "assigned": USER["id"] in (body.get("assignees") or []),
                     }
                     return self.send(200, task_json(TASKS[tid]))
@@ -244,6 +254,8 @@ class Handler(BaseHTTPRequestHandler):
                 lid = parts[1]
                 return self.send(200, {"id": lid, "name": LISTS[lid], "statuses": [
                     {"status": s[0], "color": s[1], "type": s[2], "orderindex": s[3]} for s in STATUSES[lid]]})
+            if len(parts) == 3 and parts[0] == "list" and parts[2] == "field" and parts[1] in LISTS:
+                return self.send(200, {"fields": [requester_field()] if parts[1] in REQUESTER_LISTS else []})
             if len(parts) == 3 and parts[0] == "list" and parts[2] == "task":
                 lid = parts[1]
                 ts = [task_json(t) for t in TASKS.values() if t["list_id"] == lid and t["parent"] is None and is_open(t)]
