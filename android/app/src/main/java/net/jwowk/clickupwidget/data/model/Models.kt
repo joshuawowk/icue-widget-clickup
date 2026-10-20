@@ -103,7 +103,15 @@ data class NewTask(
   val assignToMe: Boolean = true,
   /** Status name on the target list; null = the list's default (first) status. */
   val status: String? = null,
+  /** Custom field values set on create: field id → value (for a drop-down, the option's id). */
+  val customFields: Map<String, String> = emptyMap(),
 )
+
+/** A list's "Requester" drop-down custom field, for the New task sheet. */
+data class RequesterField(val id: String, val options: List<RequesterOption>)
+
+/** One option of the Requester drop-down; [id] is the value ClickUp stores on the task. */
+data class RequesterOption(val id: String, val name: String, val colorHex: String? = null)
 
 @Serializable
 data class Workspace(val id: String, val name: String)

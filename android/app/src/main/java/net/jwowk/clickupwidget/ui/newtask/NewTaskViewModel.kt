@@ -19,6 +19,7 @@ import net.jwowk.clickupwidget.R
 import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.RequesterField
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import net.jwowk.clickupwidget.widget.WidgetStore
@@ -63,6 +64,17 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
   /** Chosen status name; null = the list's default (first) status. */
   var status by mutableStateOf<String?>(null)
 
+  /** The chosen list's Requester drop-down; null while loading, when it failed, or when the list has none. */
+  var requesterField by mutableStateOf<RequesterField?>(null)
+    private set
+  var requesterLoading by mutableStateOf(false)
+    private set
+  var requesterFailed by mutableStateOf(false)
+    private set
+  var requester by mutableStateOf<RequesterChoice?>(null)
+    private set
+  private var requesterJob: Job? = null
+
   /** Normalized status names the widget's filter shows (empty = all). */
   private var visibleStatuses: Set<String> = emptySet()
   private var statusJob: Job? = null
@@ -79,7 +91,8 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
   var created by mutableStateOf(false)
     private set
 
-  val canCreate: Boolean get() = NewTaskLogic.canCreate(name, list?.id, busy)
+  /** A chosen requester waits for the list's field, so it is checked against the list the task goes to. */
+  val canCreate: Boolean get() = NewTaskLogic.canCreate(name, list?.id, busy) && !(requester != null && requesterLoading)
 
   /**
    * Load the widget's config and the starting list. Repeat calls (rotation) are ignored unless [force]
@@ -98,6 +111,11 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
     error = null
     status = null
     statuses = emptyList()
+    requesterJob?.cancel()
+    requester = null
+    requesterField = null
+    requesterLoading = false
+    requesterFailed = false
     appWidgetId = widgetId
     config = Graph.configStore.widgetConfig(widgetId)
     visibleStatuses = emptySet()
@@ -109,7 +127,7 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
     val settings = Graph.configStore.appSettings()
     val scope = if (settings.demoMode) "demo" else config.workspaceId
     list = NewTaskLogic.initialList(config, settings, scope)
-    list?.let { loadStatuses(it.id) }
+    list?.let { loadListDetails(it.id) }
     if (scope == null && list == null && !config.isListMode && settings.lastNewTaskListId.isNotBlank()) {
       // Workspace not pinned: the scope is the first workspace, which needs a lookup.
       val session = widgetId
@@ -117,7 +135,7 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
         val resolved = runCatching { Graph.repository().workspaces().firstOrNull()?.id }.getOrNull() ?: return@launch
         if (list == null && appWidgetId == session) {
           list = NewTaskLogic.initialList(config, Graph.configStore.appSettings(), resolved)
-          list?.let { loadStatuses(it.id) }
+          list?.let { loadListDetails(it.id) }
         }
       }
     }
@@ -135,7 +153,41 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
   fun chooseList(picked: ListRef) {
     if (picked.id != list?.id) {
       list = picked
-      loadStatuses(picked.id)
+      loadListDetails(picked.id)
+    }
+  }
+
+  fun chooseRequester(choice: RequesterChoice?) {
+    requester = choice
+  }
+
+  fun retryRequesterField() {
+    list?.let { loadRequesterField(it.id) }
+  }
+
+  private fun loadListDetails(listId: String) {
+    loadStatuses(listId)
+    loadRequesterField(listId)
+  }
+
+  /** The previous list's field stays up while the next one loads; the choice is re-checked against what arrives. */
+  private fun loadRequesterField(listId: String) {
+    requesterJob?.cancel()
+    requesterFailed = false
+    requesterLoading = true
+    requesterJob = viewModelScope.launch {
+      val loaded = try {
+        Result.success(Graph.repository().requesterField(listId))
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Result.failure(e)
+      }
+      if (list?.id != listId) return@launch
+      requesterLoading = false
+      requesterFailed = loaded.isFailure
+      requesterField = loaded.getOrNull()
+      requester = NewTaskLogic.carryRequester(requester, requesterField)
     }
   }
 
@@ -182,16 +234,19 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
     if (!canCreate) return
     busy = true
     error = null
+    val chosenRequester = requester
     val request = NewTask(
       listId = target.id,
       name = name.trim(),
-      description = description.trim(),
+      description = NewTaskLogic.descriptionWith(description, chosenRequester),
       dueMs = NewTaskLogic.dueMs(dueChoice, pickedEpochDay, System.currentTimeMillis()),
       priority = priority,
       assignToMe = assignToMe,
       status = status,
+      customFields = NewTaskLogic.requesterFields(requesterField, chosenRequester),
     )
     val hidden = hiddenByFilter
+    val newRequester = (chosenRequester as? RequesterChoice.New)?.name
     val widgetId = appWidgetId
     val rememberList = !config.isListMode
     val context = getApplication<Application>()
@@ -222,8 +277,13 @@ internal class NewTaskViewModel(app: Application) : AndroidViewModel(app) {
       }
       runCatching { WidgetUpdater.refreshNow(context, widgetId.takeIf { it != AppWidgetManager.INVALID_APPWIDGET_ID }) }
       runCatching {
-        val msg = if (hidden) R.string.newtask_created_hidden else R.string.newtask_created
-        Toast.makeText(context, msg, if (hidden) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        val msg = when {
+          newRequester != null -> context.getString(R.string.newtask_created_new_requester, newRequester)
+          hidden -> context.getString(R.string.newtask_created_hidden)
+          else -> context.getString(R.string.newtask_created)
+        }
+        val long = hidden || newRequester != null
+        Toast.makeText(context, msg, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
       }
     }
   }

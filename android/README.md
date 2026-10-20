@@ -31,7 +31,12 @@ ClickUp API with your personal token — no companion service.
   "+N more"; offline fallback to the last good data
 - Loads **every page** of tasks (ClickUp pages at 100), so large task lists are complete
 - **Interactive**
-  - Header buttons: **⟳ Refresh** and **+ New task** (name, list, due date, priority, description, assign to me)
+  - Header buttons: **⟳ Refresh** and **+ New task** (name, list, status, requester, due date, priority, description,
+    assign to me)
+  - **Requester** on the New task sheet, for lists with a "Requester" drop-down field: search and pick an existing
+    person, or type a new name and **Add** it. ClickUp's API can set a drop-down but can't add options, so a new name
+    is saved as the field's **Other** option with `Requester: <name>` at the top of the description; add them to the
+    drop-down in ClickUp to pick them next time
   - Tap the **title** → Settings / Open ClickUp, and **Status** + **Priority** multi-select chips
     (same semantics as iCUE: all or none selected = show everything; an accent dot marks an active filter)
   - Tap a task's **circle** → quick-complete with an **Undo** bar before it's sent to ClickUp

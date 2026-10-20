@@ -3,6 +3,8 @@ package net.jwowk.clickupwidget.data.api
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import net.jwowk.clickupwidget.data.model.RequesterField
+import net.jwowk.clickupwidget.data.model.RequesterOption
 import net.jwowk.clickupwidget.data.model.TaskField
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -144,6 +146,53 @@ class TaskFieldsTest {
     assertNull(requester("{}"))
     assertNull(requester("""{"custom_fields":[{"type":"short_text","name":"Incident No.","value":"INC1"}]}"""))
     assertNull(requester("""{"custom_fields":[{"type":"drop_down","name":"Requester","type_config":{"options":[]}}]}"""))
+  }
+
+  private fun requesterDef(json: String): RequesterField? =
+    requesterFieldDef(Json.parseToJsonElement(json).array("fields"))
+
+  @Test
+  fun requesterFieldDef_findsTheDropDownAndSortsByName() {
+    val def = requesterDef(
+      """
+      {"fields":[
+        {"id":"inc","name":"Incident No.","type":"short_text","type_config":{}},
+        {"id":"lbl","name":"Requester","type":"labels","type_config":{"options":[{"id":"x","label":"Nope"}]}},
+        {"id":"req","name":" requester ","type":"drop_down","type_config":{"sorting":"name_asc","options":[
+          {"id":"o2","name":"becky Puleo","color":"#800000","orderindex":0},
+          {"id":"o1","name":"Ariana Carlone","color":"#9b59b6","orderindex":1},
+          {"id":"o3","name":"  ","orderindex":2},
+          {"name":"No id","orderindex":3},
+          {"id":"o4","name":"Other","color":"","orderindex":4}]}}]}
+      """.trimIndent(),
+    )
+    assertEquals(
+      RequesterField(
+        "req",
+        listOf(RequesterOption("o1", "Ariana Carlone", "#9b59b6"), RequesterOption("o2", "becky Puleo", "#800000"), RequesterOption("o4", "Other")),
+      ),
+      def,
+    )
+  }
+
+  @Test
+  fun requesterFieldDef_keepsOrderindexUnlessSortedByName() {
+    val opts = """[{"id":"z","name":"Charlie","orderindex":"2"},{"id":"x","name":"Bravo","orderindex":0},{"id":"y","name":"alpha","orderindex":1}]"""
+    fun ids(sorting: String) =
+      requesterDef("""{"fields":[{"id":"r","name":"Requester","type":"drop_down","type_config":{$sorting"options":$opts}}]}""")!!
+        .options.map { it.id }
+    assertEquals(listOf("x", "y", "z"), ids(""))
+    assertEquals(listOf("x", "y", "z"), ids(""""sorting":"manual","""))
+    assertEquals(listOf("y", "x", "z"), ids(""""sorting":"name_asc","""))
+    assertEquals(listOf("z", "x", "y"), ids(""""sorting":"name_desc","""))
+  }
+
+  @Test
+  fun requesterFieldDef_absent() {
+    assertNull(requesterDef("""{"fields":[]}"""))
+    assertNull(requesterDef("""{"fields":[{"id":"u","name":"Requester","type":"users"}]}"""))
+    assertNull(requesterDef("""{"fields":[{"name":"Requester","type":"drop_down","type_config":{"options":[]}}]}"""))
+    assertEquals(RequesterField("r", emptyList()), requesterDef("""{"fields":[{"id":"r","name":"Requester","type":"drop_down"}]}"""))
   }
 
   @Test

@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import net.jwowk.clickupwidget.data.model.RequesterField
+import net.jwowk.clickupwidget.data.model.RequesterOption
 import net.jwowk.clickupwidget.data.model.TaskField
 import java.math.BigDecimal
 import java.time.Instant
@@ -60,6 +62,32 @@ fun requesterField(
 ): Pair<String, String?>? = task.array("custom_fields").firstNotNullOfOrNull { f ->
   val field = f.asObject()?.takeIf { it.str("name")?.trim().equals(REQUESTER_FIELD, ignoreCase = true) }
   field?.let { customField(it, locale, zone) }
+}
+
+/**
+ * The [REQUESTER_FIELD] drop-down among a list's field definitions (`fields` of `GET /list/{id}/field`), or null
+ * when the list has none. Options follow the field's sorting: by name for name_asc/name_desc, else its own order.
+ */
+fun requesterFieldDef(fields: List<JsonElement>): RequesterField? {
+  val field = fields.firstNotNullOfOrNull { f ->
+    f.asObject()?.takeIf {
+      it.str("name")?.trim().equals(REQUESTER_FIELD, ignoreCase = true) && it.str("type").equals("drop_down", ignoreCase = true)
+    }
+  } ?: return null
+  val id = field.str("id")?.takeIf { it.isNotBlank() } ?: return null
+  val config = field["type_config"].asObject()
+  val raw = options(config).mapNotNull { o ->
+    val optionId = o.str("id")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+    val name = o.str("name")?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+    (o.long("orderindex") ?: Long.MAX_VALUE) to RequesterOption(optionId, name, o.optionColor())
+  }
+  val byName = compareBy<RequesterOption, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+  val sorted = when (config?.str("sorting")?.lowercase()) {
+    "name_asc" -> raw.map { it.second }.sortedWith(byName)
+    "name_desc" -> raw.map { it.second }.sortedWith(byName.reversed())
+    else -> raw.sortedBy { it.first }.map { it.second }
+  }
+  return RequesterField(id, sorted)
 }
 
 /** Weekday + month + day + year in [locale], e.g. "Thu, Oct 16, 2026" for en-US. */

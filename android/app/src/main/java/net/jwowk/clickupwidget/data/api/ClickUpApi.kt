@@ -21,6 +21,7 @@ import net.jwowk.clickupwidget.data.model.ListRef
 import net.jwowk.clickupwidget.data.model.NewTask
 import net.jwowk.clickupwidget.data.model.NoTokenException
 import net.jwowk.clickupwidget.data.model.Priority
+import net.jwowk.clickupwidget.data.model.RequesterField
 import net.jwowk.clickupwidget.data.model.TaskDetail
 import net.jwowk.clickupwidget.data.model.TaskField
 import net.jwowk.clickupwidget.data.model.TaskFetch
@@ -179,6 +180,13 @@ class ClickUpApi(
   }
 
   /**
+   * The list's [REQUESTER_FIELD] drop-down with its options, or null when the list has none. Not cached: options
+   * added in ClickUp should show up the next time the New task sheet loads them.
+   */
+  suspend fun requesterField(listId: String): RequesterField? =
+    requesterFieldDef(getJson(path("list", listId, "field")).array("fields"))
+
+  /**
    * Description + direct subtasks. Primary endpoint first; if it yields no subtasks, the team-level
    * `parent` query. Throws only when the primary failed AND the fallback also failed.
    */
@@ -247,6 +255,7 @@ class ClickUpApi(
   /**
    * POST /list/{listId}/task; returns the created task as shaped by the response (nothing inherited).
    * A blank name throws [IllegalArgumentException] before any request. `assignToMe` assigns the token's user.
+   * [NewTask.customFields] go out as `custom_fields` (ClickUp can set drop-down options, not create them).
    */
   suspend fun createTask(task: NewTask): TaskItem {
     val name = task.name.trim()
@@ -263,6 +272,9 @@ class ClickUpApi(
         put("due_date_time", false)
       }
       if (me != null) put("assignees", JsonArray(listOf(JsonPrimitive(me))))
+      if (task.customFields.isNotEmpty()) {
+        put("custom_fields", JsonArray(task.customFields.map { (id, value) -> buildJsonObject { put("id", id); put("value", value) } }))
+      }
     }.toString().toRequestBody(JSON_MEDIA)
     val created = execute(authed(path("list", task.listId, "task"), token).post(body).build()) { JSON.parseToJsonElement(it) }
     return shapeTask(created) ?: throw IOException("Unexpected response creating task")

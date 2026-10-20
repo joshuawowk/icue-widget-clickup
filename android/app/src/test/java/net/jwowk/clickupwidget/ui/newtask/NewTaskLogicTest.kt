@@ -7,6 +7,8 @@ import java.time.ZonedDateTime
 import net.jwowk.clickupwidget.data.model.AppSettings
 import net.jwowk.clickupwidget.data.model.ClickUpApiException
 import net.jwowk.clickupwidget.data.model.NoTokenException
+import net.jwowk.clickupwidget.data.model.RequesterField
+import net.jwowk.clickupwidget.data.model.RequesterOption
 import net.jwowk.clickupwidget.data.model.TaskStatus
 import net.jwowk.clickupwidget.data.model.WidgetConfig
 import org.junit.Assert.assertEquals
@@ -135,6 +137,57 @@ class NewTaskLogicTest {
     assertNull(NewTaskLogic.defaultStatus(listStatuses, setOf("done")))
     // Filter shows a status this list doesn't have -> list default.
     assertNull(NewTaskLogic.defaultStatus(listStatuses, setOf("review")))
+  }
+
+  private val ariana = RequesterOption("o1", "Ariana Carlone", "#9b59b6")
+  private val becky = RequesterOption("o2", "Becky Puleo", "#800000")
+  private val other = RequesterOption("o3", "Other", "#b5bcc2")
+  private val field = RequesterField("req", listOf(ariana, becky, other))
+
+  @Test fun requesterSearch_filtersAndOffersOnlyUnknownNames() {
+    assertEquals(listOf(ariana, becky, other), NewTaskLogic.filterRequesters(field.options, "  "))
+    assertEquals(listOf(ariana, other), NewTaskLogic.filterRequesters(field.options, "R"))
+    assertEquals(listOf(becky), NewTaskLogic.filterRequesters(field.options, " becky  puleo "))
+    assertNull(NewTaskLogic.newRequesterName(field.options, "   "))
+    assertNull(NewTaskLogic.newRequesterName(field.options, "becky puleo"))
+    assertEquals("Becky", NewTaskLogic.newRequesterName(field.options, " Becky "))
+    assertEquals("Jane Doe", NewTaskLogic.newRequesterName(field.options, "  Jane \t Doe "))
+  }
+
+  @Test fun requesterFields_existingOptionOrOtherForANewName() {
+    assertEquals(mapOf("req" to "o2"), NewTaskLogic.requesterFields(field, RequesterChoice.Existing(becky)))
+    assertEquals(mapOf("req" to "o3"), NewTaskLogic.requesterFields(field, RequesterChoice.New("Jane Doe")))
+    val noOther = RequesterField("req", listOf(ariana, becky))
+    assertNull(NewTaskLogic.otherOption(noOther))
+    assertEquals(emptyMap<String, String>(), NewTaskLogic.requesterFields(noOther, RequesterChoice.New("Jane Doe")))
+    assertEquals(emptyMap<String, String>(), NewTaskLogic.requesterFields(field, null))
+    assertEquals(emptyMap<String, String>(), NewTaskLogic.requesterFields(null, RequesterChoice.Existing(becky)))
+    assertEquals("o3", NewTaskLogic.otherOption(RequesterField("r", listOf(ariana, other.copy(name = " OTHER "))))?.id)
+  }
+
+  @Test fun descriptionWith_putsANewRequesterFirst() {
+    assertEquals("Requester: Jane Doe", NewTaskLogic.descriptionWith("  ", RequesterChoice.New("Jane Doe")))
+    assertEquals("Requester: Jane Doe\n\nPrinter jams", NewTaskLogic.descriptionWith(" Printer jams\n", RequesterChoice.New("Jane Doe")))
+    assertEquals("Printer jams", NewTaskLogic.descriptionWith(" Printer jams ", RequesterChoice.Existing(becky)))
+    assertEquals("", NewTaskLogic.descriptionWith("", null))
+  }
+
+  @Test fun carryRequester_keepsWhatTheNewFieldStillHas() {
+    val renamed = becky.copy(name = "Rebecca Puleo")
+    assertEquals(
+      RequesterChoice.Existing(renamed),
+      NewTaskLogic.carryRequester(RequesterChoice.Existing(becky), RequesterField("req", listOf(renamed))),
+    )
+    assertNull(NewTaskLogic.carryRequester(RequesterChoice.Existing(becky), RequesterField("req", listOf(ariana))))
+    assertEquals(RequesterChoice.New("Jane Doe"), NewTaskLogic.carryRequester(RequesterChoice.New("Jane Doe"), field))
+    // Added in ClickUp meanwhile -> becomes the real option.
+    val jane = RequesterOption("o9", "Jane Doe")
+    assertEquals(
+      RequesterChoice.Existing(jane),
+      NewTaskLogic.carryRequester(RequesterChoice.New("jane doe"), RequesterField("req", listOf(jane))),
+    )
+    assertNull(NewTaskLogic.carryRequester(RequesterChoice.New("Jane Doe"), null))
+    assertNull(NewTaskLogic.carryRequester(null, field))
   }
 
   @Test fun hiddenByFilter_usesTheListDefaultWhenNoneChosen() {
