@@ -1,5 +1,5 @@
 /data/
 *.icuewidget
 .DS_Store
-.claude/worktrees/
+.claude/
 /dev/out/
