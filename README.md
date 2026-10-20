@@ -1,5 +1,8 @@
 # ClickUp Tasks — iCUE Widget for Xeneon Edge
 
+[![Release](https://img.shields.io/github/v/release/joshuawowk/icue-widget-clickup?filter=v*&label=release)](https://github.com/joshuawowk/icue-widget-clickup/releases)
+[![License: MIT](https://img.shields.io/github/license/joshuawowk/icue-widget-clickup)](LICENSE)
+
 A glanceable, **My Day**-style ClickUp task list for the CORSAIR Xeneon Edge. Dark theme, circular checkboxes, due-date chips (Overdue / Today / Tomorrow), priority stars, and the list each task belongs to — designed to mirror the Microsoft To-Do Android widget aesthetic.
 
 ![preview](resources/preview.png)
@@ -35,20 +38,33 @@ An Android home-screen widget with the same function and look — Material You o
 resizable, per-widget settings, quick-complete with Undo, filters and task details — lives in
 [`android/`](android/README.md).
 
-## Installation
+## Install
 
-### With the iCUE Widget CLI
+### Prerequisites
+
+- Windows PC with **iCUE 5.52 or newer** (the widget declares `min_app_version` 5.52)
+- A **CORSAIR Xeneon Edge** (the widget targets the `dashboard_lcd` device)
+- A **ClickUp** account and a personal API token (see [Setup](#setup))
+- Internet access to `api.clickup.com` (declared as a `url` permission in `manifest.json`; iCUE shows it for approval on install)
+
+### From a release (recommended)
+
+1. Download [`ClickUp-Tasks-1.5.1.icuewidget`](https://github.com/joshuawowk/icue-widget-clickup/releases/download/v1.5.1/ClickUp-Tasks-1.5.1.icuewidget) from the [GitHub Releases](https://github.com/joshuawowk/icue-widget-clickup/releases) page. Release tags are `vX.Y.Z` for this iCUE widget; tags starting `android-v` belong to the Android app, so always use a `v` release.
+2. Double-click the `.icuewidget` file, **or** open iCUE → **Widgets** → **+** and select the file.
+3. Add the widget to a Xeneon Edge slot and continue with [Setup](#setup).
+
+The link above is pinned to a version. To get a newer widget build, pick the latest `v` release on the Releases page and download the `ClickUp-Tasks-<version>.icuewidget` asset.
+
+### Build from source
+
+Needs [Node.js](https://nodejs.org/) and the official CLI (`npm install -g icuewidget-cli`).
 
 ```
-icuewidget validate icue-widget-clickup
-icuewidget package icue-widget-clickup
+npm run validate   # icuewidget validate .
+npm run package    # stages the widget files and runs icuewidget package -> dist/ClickUp-Tasks-<version>.icuewidget
 ```
 
-Double-click the produced `.icuewidget` file to install into iCUE (5.44+).
-
-### Manual (development)
-
-Copy this folder into your iCUE widgets directory and restart iCUE.
+Do not run `icuewidget package .` in the repo root: it zips every non-hidden file, including `android/` and `dev/`. `npm run package` stages only the files the widget loads. Then install the file from `dist/` as above.
 
 ## Setup
 
