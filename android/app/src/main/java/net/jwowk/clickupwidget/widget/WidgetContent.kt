@@ -157,11 +157,12 @@ internal fun WidgetRoot(state: WidgetState, env: WidgetEnv) {
       )
     }
     val content = GlanceModifier.fillMaxSize().let { if (bitmap == null) it.background(colors.background) else it }
-    Column(modifier = content.padding(dims.pad)) {
+    Column(modifier = content) {
+      val padded = GlanceModifier.fillMaxSize().padding(dims.pad)
       when (state.snapshot.loadState) {
-        LoadState.LOADING -> Loading(colors, dims)
-        LoadState.SETUP -> Setup(colors, dims, env)
-        LoadState.ERROR -> ErrorState(state, colors, dims, env)
+        LoadState.LOADING -> Column(padded) { Loading(colors, dims) }
+        LoadState.SETUP -> Column(padded) { Setup(colors, dims, env) }
+        LoadState.ERROR -> Column(padded) { ErrorState(state, colors, dims, env) }
         LoadState.READY -> Ready(state, config, colors, dims, env)
       }
     }
@@ -231,15 +232,38 @@ private fun ErrorState(state: WidgetState, colors: WidgetColors, dims: Dims, env
 private fun ColumnScope.Ready(state: WidgetState, config: WidgetConfig, colors: WidgetColors, dims: Dims, env: WidgetEnv) {
   val now = System.currentTimeMillis()
   val view = state.view(now)
-  val filterEmpty = view.total == 0 && view.scopedTotal > 0
   val barOpen = state.ui.filterBarOpen
-  Header(state, config, view, barOpen, colors, dims, env)
-  Spacer(GlanceModifier.height(8.dp))
-  Box(GlanceModifier.fillMaxWidth().height(1.dp).background(colors.divider)) {}
-  if (view.scopedTotal == 0 && !barOpen) {
-    Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.Center) { AllClear(colors, dims) }
-    return
+  // The header band stays opaque (full width; the widget's rounded corners clip it); only the list below
+  // takes the background opacity / image.
+  Column(
+    modifier = GlanceModifier.fillMaxWidth().background(colors.headerBackground)
+      .padding(start = dims.pad, top = dims.pad, end = dims.pad),
+  ) {
+    Header(state, config, view, barOpen, colors, dims, env)
+    Spacer(GlanceModifier.height(8.dp))
+    Box(GlanceModifier.fillMaxWidth().height(1.dp).background(colors.divider)) {}
   }
+  Column(modifier = GlanceModifier.fillMaxWidth().defaultWeight().padding(start = dims.pad, end = dims.pad, bottom = dims.pad)) {
+    if (view.scopedTotal == 0 && !barOpen) {
+      Box(GlanceModifier.fillMaxWidth().defaultWeight(), contentAlignment = Alignment.Center) { AllClear(colors, dims) }
+    } else {
+      TaskList(state, config, view, now, barOpen, colors, dims, env)
+    }
+  }
+}
+
+@Composable
+private fun ColumnScope.TaskList(
+  state: WidgetState,
+  config: WidgetConfig,
+  view: TaskListView,
+  now: Long,
+  barOpen: Boolean,
+  colors: WidgetColors,
+  dims: Dims,
+  env: WidgetEnv,
+) {
+  val filterEmpty = view.total == 0 && view.scopedTotal > 0
   val context = LocalContext.current
   val inFlight = state.ui.pendingCompletions + state.committing
   val toastShowing = toastText(state, now, context) != null
