@@ -66,7 +66,7 @@ class TokenStore(context: Context) {
     cacheLoaded = true
   }
 
-  /** e.g. "Josh · Getinge" — shown in the app; null if unknown. */
+  /** e.g. "Josh · Work" — shown in the app; null if unknown. */
   fun accountLabel(): String? = prefs.getString(KEY_LABEL, null)
 
   fun saveAccountLabel(label: String?) {

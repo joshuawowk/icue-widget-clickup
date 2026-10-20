@@ -156,7 +156,7 @@ class TaskFieldsTest {
           {"id":"beef","name":"Becky Puleo","color":"#800000","orderindex":17}]}},
         {"type":"date","name":"Done Date","value":"1792051200000"},
         {"type":"short_text","name":"Incident No.","value":"INC2383904"},
-        {"type":"number","name":"Epicor Task No","value":"9","type_config":{"number_format":"en-US"}},
+        {"type":"number","name":"Ticket No","value":"9","type_config":{"number_format":"en-US"}},
         {"type":"text","name":"Incident Description","value":"Good day,\n\nPlease help."},
         {"type":"automatic_progress","name":"Progress","value":{"percent_complete":0}}
       ]}
@@ -167,7 +167,7 @@ class TaskFieldsTest {
         TaskField("Requester", "Becky Puleo", "#800000"),
         TaskField("Done Date", "Thu, Oct 15, 2026"),
         TaskField("Incident No.", "INC2383904"),
-        TaskField("Epicor Task No", "9"),
+        TaskField("Ticket No", "9"),
         TaskField("Incident Description", "Good day,\n\nPlease help."),
       ),
       out,

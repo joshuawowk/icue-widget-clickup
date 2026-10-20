@@ -10,7 +10,7 @@ import net.jwowk.clickupwidget.widget.WidgetUpdater
 enum class ConnectError { INVALID_TOKEN, NETWORK, SERVER, UNKNOWN }
 
 sealed interface ConnectResult {
-  /** [label] is what was stored as the account label, e.g. "Josh · Getinge". */
+  /** [label] is what was stored as the account label, e.g. "Josh · Work". */
   data class Connected(val label: String) : ConnectResult
   data class Failed(val error: ConnectError, val detail: String? = null) : ConnectResult
 }
