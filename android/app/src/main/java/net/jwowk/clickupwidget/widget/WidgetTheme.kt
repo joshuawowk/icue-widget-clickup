@@ -15,6 +15,8 @@ import androidx.glance.color.ColorProvider as DayNight
 /** Resolved widget colors for one config. */
 internal class WidgetColors(
   val background: ColorProvider,
+  /** Header band: the theme background at full opacity, whatever the opacity setting or background image. */
+  val headerBackground: ColorProvider,
   val text: ColorProvider,
   val muted: ColorProvider,
   /** Unselected chip label / dot. */
@@ -61,6 +63,7 @@ internal fun widgetColors(config: WidgetConfig): WidgetColors {
     fun pair(f: (RawPalette) -> Long) = DayNight(day = argb(f(light)), night = argb(f(dark)))
     return WidgetColors(
       background = if (q == 100) c.widgetBackground else ColorProvider(BG_RES[q / 10]),
+      headerBackground = c.widgetBackground,
       text = c.onSurface,
       muted = c.onSurfaceVariant,
       faded = c.onSurfaceVariant,
@@ -84,6 +87,7 @@ internal fun widgetColors(config: WidgetConfig): WidgetColors {
   fun pick(f: (RawPalette) -> Long): ColorProvider = DayNight(day = argb(f(day)), night = argb(f(night)))
   return WidgetColors(
     background = pick { Palettes.withAlpha(it.background, opacity) },
+    headerBackground = pick { Palettes.withAlpha(it.background, 1f) },
     text = pick { it.text },
     muted = pick { Palettes.withAlpha(it.text, 0.58f) },
     faded = pick { Palettes.withAlpha(it.text, 0.40f) },
