@@ -1,0 +1,11 @@
+{
+  "name": "icue-widget-clickup",
+  "version": "1.5.1",
+  "private": true,
+  "description": "ClickUp Tasks widget for the CORSAIR Xeneon Edge (iCUE). Build tooling only; the Android app lives in android/.",
+  "license": "MIT",
+  "scripts": {
+    "validate": "icuewidget validate .",
+    "package": "node tools/package.js"
+  }
+}
