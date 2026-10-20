@@ -1,0 +1,9 @@
+/*
+ * MediaViewer styles - CORSAIR iCUE common tool, bundled so the widget is self-contained.
+ * Source: https://github.com/Corsair-Labs/icue-widget-builder
+ *         (skills/icue-widget-builder/references/common-tools.md), MIT License, Copyright (c) 2026 CORSAIR.
+ */
+.position-container { position: absolute; transform-origin: top left; }
+.scale-container { transform-origin: top left; }
+.rotation-container { transform-origin: center center; }
+.rotation-container img, .rotation-container video { display: block; object-fit: contain; }

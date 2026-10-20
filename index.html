@@ -4,34 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>tr('ClickUp Tasks')</title>
-  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="resources/icon.svg" />
 
-  <meta name="x-icue-restrictions" data-restrictions='[{ "device": "dashboard_lcd" }]'>
-  <meta name="x-icue-widget-group" content="tr('Productivity')">
+  <meta name="x-icue-restrictions" data-restrictions='[{ "device": "dashboard_lcd" }]' />
+  <meta name="x-icue-widget-group" content="tr('Productivity')" />
 
   <!-- MediaViewer for background image support -->
-  <script type="text/javascript" src="../common/tools/media_viewer/MediaViewer.js"></script>
-  <link rel="stylesheet" type="text/css" href="../common/tools/media_viewer/MediaViewer.css">
+  <script type="text/javascript" src="common/tools/media_viewer/MediaViewer.js"></script>
+  <link rel="stylesheet" type="text/css" href="common/tools/media_viewer/MediaViewer.css" />
 
   <!-- Feature properties -->
-  <meta name="x-icue-property" content="apiToken" data-label="tr('ClickUp API Token')" data-type="textfield" data-default="''">
-  <meta name="x-icue-property" content="listId" data-label="tr('List ID (optional, blank = all my tasks)')" data-type="textfield" data-default="''">
-  <meta name="x-icue-property" content="widgetTitle" data-label="tr('Title')" data-type="textfield" data-default="'My Tasks'">
+  <meta name="x-icue-property" content="apiToken" data-label="tr('ClickUp API Token')" data-type="textfield" data-default="''" />
+  <meta name="x-icue-property" content="listId" data-label="tr('List ID (optional, blank = all my tasks)')" data-type="textfield" data-default="''" />
+  <meta name="x-icue-property" content="widgetTitle" data-label="tr('Title')" data-type="textfield" data-default="'My Tasks'" />
   <meta name="x-icue-property" content="dueFilter" data-label="tr('Show')" data-type="combobox" data-default="'all'"
-        data-values="[{'key':'all','value':tr('All open tasks')},{'key':'today','value':tr('Due today + overdue')},{'key':'week','value':tr('Due this week')}]">
+        data-values="[{'key':'all','value':tr('All open tasks')},{'key':'today','value':tr('Due today + overdue')},{'key':'week','value':tr('Due this week')}]" />
   <meta name="x-icue-property" content="priorityFilter" data-label="tr('Priority (default)')" data-type="combobox" data-default="'all'"
-        data-values="[{'key':'all','value':tr('All priorities')},{'key':'urgent','value':tr('Urgent only')},{'key':'high','value':tr('High and up')},{'key':'normal','value':tr('Normal and up')}]">
-  <meta name="x-icue-property" content="statusDefault" data-label="tr('Default Status (blank = all)')" data-type="textfield" data-default="'In-Progress'">
-  <meta name="x-icue-property" content="maxItems" data-label="tr('Max Tasks')" data-type="slider" data-default="12" data-min="3" data-max="30" data-step="1">
-  <meta name="x-icue-property" content="refreshMinutes" data-label="tr('Refresh Interval')" data-type="slider" data-default="5" data-min="1" data-max="30" data-step="1" data-unit-label="'min'">
+        data-values="[{'key':'all','value':tr('All priorities')},{'key':'urgent','value':tr('Urgent only')},{'key':'high','value':tr('High and up')},{'key':'normal','value':tr('Normal and up')}]" />
+  <meta name="x-icue-property" content="statusDefault" data-label="tr('Default Status (blank = all)')" data-type="textfield" data-default="'In-Progress'" />
+  <meta name="x-icue-property" content="maxItems" data-label="tr('Max Tasks')" data-type="slider" data-default="12" data-min="3" data-max="30" data-step="1" />
+  <meta name="x-icue-property" content="refreshMinutes" data-label="tr('Refresh Interval')" data-type="slider" data-default="5" data-min="1" data-max="30" data-step="1" data-unit-label="'min'" />
 
   <!-- Widget Personalization -->
-  <meta name="x-icue-property" content="textColor" data-label="tr('Text Color')" data-type="color" data-default="'#ffffff'">
-  <meta name="x-icue-property" content="accentColor" data-label="tr('Accent Color')" data-type="color" data-default="'#9f8fff'">
-  <meta name="x-icue-property" content="backgroundColor" data-label="tr('Background Color')" data-type="color" data-default="'#15161c'">
-  <meta name="x-icue-property" content="backgroundMedia" data-label="tr('Background Image')" data-type="media-selector" data-filters="['*.png','*.jpg','*.jpeg','*.webp']">
-  <meta name="x-icue-property" content="glassBlur" data-label="tr('Glass Blur')" data-type="slider" data-default="0" data-min="0" data-max="30" data-step="1">
-  <meta name="x-icue-property" content="transparency" data-label="tr('Background Transparency')" data-type="slider" data-default="100" data-min="0" data-max="100" data-step="1" data-unit-label="'%'">
+  <meta name="x-icue-property" content="textColor" data-label="tr('Text Color')" data-type="color" data-default="'#ffffff'" />
+  <meta name="x-icue-property" content="accentColor" data-label="tr('Accent Color')" data-type="color" data-default="'#9f8fff'" />
+  <meta name="x-icue-property" content="backgroundColor" data-label="tr('Background Color')" data-type="color" data-default="'#15161c'" />
+  <meta name="x-icue-property" content="backgroundMedia" data-label="tr('Background Image')" data-type="media-selector" data-filters="['*.png','*.jpg','*.jpeg','*.webp']" />
+  <meta name="x-icue-property" content="glassBlur" data-label="tr('Glass Blur')" data-type="slider" data-default="0" data-min="0" data-max="30" data-step="1" />
+  <meta name="x-icue-property" content="transparency" data-label="tr('Background Transparency')" data-type="slider" data-default="100" data-min="0" data-max="100" data-step="1" data-unit-label="'%'" />
 
   <script id="x-icue-groups" type="application/json">
   [
@@ -40,7 +40,7 @@
   ]
   </script>
 
-  <link rel="stylesheet" type="text/css" href="styles/ClickUpTasks.css">
+  <link rel="stylesheet" type="text/css" href="styles/ClickUpTasks.css" />
 </head>
 <body>
   <div class="widget-root">
