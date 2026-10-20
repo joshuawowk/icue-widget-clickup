@@ -33,7 +33,7 @@ LISTS = {"L1": "Engineering", "L2": "Ops", "L3": "Inbox"}
 PRIO = {"urgent": "#f50000", "high": "#ffcc00", "normal": "#6fddff", "low": "#d8d8d8"}
 PRIO_BY_ID = {1: "urgent", 2: "high", 3: "normal", 4: "low"}
 TAG_COLORS = {"finance": "#0f5096", "bug": "#e50000", "planning": "#1b9e77", "security": "#7b2cbf", "meeting": "#0f5096"}
-REQUESTERS = [("Ariana Carlone", "#9b59b6"), ("Becky Puleo", "#800000"), ("Dana Reyes", "#1abc9c")]
+REQUESTERS = [("Marina Delgado", "#9b59b6"), ("Jenny Ellis", "#800000"), ("Sara Lopez", "#1abc9c")]
 PAGE = 100
 DAY = 86_400_000
 
@@ -77,7 +77,7 @@ def seed():
             "created": now - 7 * DAY,
             "fields": {
                 "requester": {"t1": 1, "t2": 0, "t7": 2}.get(tid),
-                "incident": {"t2": "INC2383904", "t7": "INC2390117"}.get(tid),
+                "incident": {"t2": "INC0012345", "t7": "INC0012347"}.get(tid),
                 "done_date": str(now + 5 * DAY) if tid in ("t1", "t5") else None,
                 "ticket": {"t1": "9", "t6": "42"}.get(tid),
                 "notes": "Customer reports the redirect loops after SSO.\nRepro on Android 14." if tid == "t2" else None,

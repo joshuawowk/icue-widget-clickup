@@ -83,7 +83,7 @@ data class TaskDetail(
   val fields: List<TaskField> = emptyList(),
 )
 
-/** One populated task field for display, e.g. ("Requester", "Becky Puleo", "#800000"). */
+/** One populated task field for display, e.g. ("Requester", "Jenny Ellis", "#800000"). */
 @Serializable
 data class TaskField(
   val name: String,

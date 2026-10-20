@@ -37,19 +37,19 @@ class TaskFieldsTest {
   fun standardFields_inOrder() {
     val out = fields(
       """
-      {"assignees":[{"username":"Josh"},{"username":"Becky"},{"username":""},{"id":3}],
+      {"assignees":[{"username":"Josh"},{"username":"Jenny"},{"username":""},{"id":3}],
        "start_date":"1792051200000","time_estimate":5400000,"points":3,
-       "date_created":"1792108800000","creator":{"username":"Ariana"},
+       "date_created":"1792108800000","creator":{"username":"Marina"},
        "custom_fields":[{"name":"Incident No.","type":"short_text","value":"INC1"}]}
       """.trimIndent(),
     )
     assertEquals(
       listOf(
-        TaskField("Assignees", "Josh, Becky"),
+        TaskField("Assignees", "Josh, Jenny"),
         TaskField("Start date", "Thu, Oct 15, 2026"),
         TaskField("Time estimate", "1h 30m"),
         TaskField("Sprint points", "3"),
-        TaskField("Created", "Fri, Oct 16, 2026 by Ariana"),
+        TaskField("Created", "Fri, Oct 16, 2026 by Marina"),
         TaskField("Incident No.", "INC1"),
       ),
       out,
@@ -123,14 +123,14 @@ class TaskFieldsTest {
   @Test
   fun requesterField_dropDownByOrderindexOrOptionId() {
     val options = """"type_config":{"options":[
-      {"id":"cad9","name":"Ariana Carlone","color":"#9b59b6","orderindex":0},
-      {"id":"beef","name":"Becky Puleo","color":"#800000","orderindex":17}]}"""
+      {"id":"cad9","name":"Marina Delgado","color":"#9b59b6","orderindex":0},
+      {"id":"beef","name":"Jenny Ellis","color":"#800000","orderindex":17}]}"""
     assertEquals(
-      "Becky Puleo" to "#800000",
+      "Jenny Ellis" to "#800000",
       requester("""{"custom_fields":[{"type":"drop_down","name":"Requester","value":17,$options}]}"""),
     )
     assertEquals(
-      "Ariana Carlone" to "#9b59b6",
+      "Marina Delgado" to "#9b59b6",
       requester("""{"custom_fields":[{"type":"drop_down","name":" requester ","value":"cad9",$options}]}"""),
     )
   }
@@ -152,10 +152,10 @@ class TaskFieldsTest {
       """
       {"custom_fields":[
         {"type":"drop_down","name":"Requester","value":17,"type_config":{"options":[
-          {"id":"cad9","name":"Ariana Carlone","color":"#9b59b6","orderindex":0},
-          {"id":"beef","name":"Becky Puleo","color":"#800000","orderindex":17}]}},
+          {"id":"cad9","name":"Marina Delgado","color":"#9b59b6","orderindex":0},
+          {"id":"beef","name":"Jenny Ellis","color":"#800000","orderindex":17}]}},
         {"type":"date","name":"Done Date","value":"1792051200000"},
-        {"type":"short_text","name":"Incident No.","value":"INC2383904"},
+        {"type":"short_text","name":"Incident No.","value":"INC0012345"},
         {"type":"number","name":"Ticket No","value":"9","type_config":{"number_format":"en-US"}},
         {"type":"text","name":"Incident Description","value":"Good day,\n\nPlease help."},
         {"type":"automatic_progress","name":"Progress","value":{"percent_complete":0}}
@@ -164,9 +164,9 @@ class TaskFieldsTest {
     )
     assertEquals(
       listOf(
-        TaskField("Requester", "Becky Puleo", "#800000"),
+        TaskField("Requester", "Jenny Ellis", "#800000"),
         TaskField("Done Date", "Thu, Oct 15, 2026"),
-        TaskField("Incident No.", "INC2383904"),
+        TaskField("Incident No.", "INC0012345"),
         TaskField("Ticket No", "9"),
         TaskField("Incident Description", "Good day,\n\nPlease help."),
       ),

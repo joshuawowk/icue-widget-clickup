@@ -140,10 +140,10 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
       )
       val (eng, ops, mkt) = LISTS
       return listOf(
-        task(1, "Fix login redirect loop", eng, -2, Priority.URGENT, IN_PROGRESS, listOf("bug", "customer"), "Ariana Carlone"),
-        task(2, "Review pull request #482", eng, 0, Priority.HIGH, IN_PROGRESS, listOf("review"), "Dana Reyes"),
+        task(1, "Fix login redirect loop", eng, -2, Priority.URGENT, IN_PROGRESS, listOf("bug", "customer"), "Marina Delgado"),
+        task(2, "Review pull request #482", eng, 0, Priority.HIGH, IN_PROGRESS, listOf("review"), "Sara Lopez"),
         task(3, "Update deployment runbook", ops, 0, Priority.NORMAL, TO_DO, listOf("docs")),
-        task(4, "Prepare Q4 launch checklist", mkt, 1, Priority.NORMAL, IN_PROGRESS, listOf("launch"), "Becky Puleo"),
+        task(4, "Prepare Q4 launch checklist", mkt, 1, Priority.NORMAL, IN_PROGRESS, listOf("launch"), "Jenny Ellis"),
         task(5, "Plan sprint retrospective", eng, 4, Priority.NORMAL, IN_PROGRESS),
         task(6, "Renew monitoring licenses", ops, 10, Priority.HIGH, TO_DO),
         task(7, "Investigate slow dashboard queries", eng, null, Priority.URGENT, REVIEW, listOf("performance")),
@@ -184,9 +184,9 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
 
     /** Requester drop-down option colors (match [sampleFields]). */
     private val REQUESTER_COLORS = mapOf(
-      "Ariana Carlone" to "#9b59b6",
-      "Becky Puleo" to "#800000",
-      "Dana Reyes" to "#1abc9c",
+      "Marina Delgado" to "#9b59b6",
+      "Jenny Ellis" to "#800000",
+      "Sara Lopez" to "#1abc9c",
     )
 
     /** Read-only populated fields for a few demo tasks (what the live API's custom fields would give). */
@@ -197,25 +197,25 @@ class DemoTaskRepository(nowMs: Long) : TaskRepository {
         "demo-1" -> listOf(
           TaskField("Assignees", "Demo User"),
           TaskField("Time estimate", "4h"),
-          TaskField("Requester", "Ariana Carlone", "#9b59b6"),
-          TaskField("Incident No.", "INC2383904"),
-          TaskField("Created", date(-6) + " by Becky Puleo"),
+          TaskField("Requester", "Marina Delgado", "#9b59b6"),
+          TaskField("Incident No.", "INC0012345"),
+          TaskField("Created", date(-6) + " by Jenny Ellis"),
         )
         "demo-2" -> listOf(
           TaskField("Assignees", "Demo User"),
-          TaskField("Requester", "Dana Reyes", "#1abc9c"),
+          TaskField("Requester", "Sara Lopez", "#1abc9c"),
         )
         "demo-4" -> listOf(
-          TaskField("Assignees", "Demo User, Becky Puleo"),
+          TaskField("Assignees", "Demo User, Jenny Ellis"),
           TaskField("Start date", date(-3)),
           TaskField("Sprint points", "5"),
-          TaskField("Requester", "Becky Puleo", "#800000"),
+          TaskField("Requester", "Jenny Ellis", "#800000"),
           TaskField("Progress", "50%"),
         )
         "demo-7" -> listOf(
           TaskField("Assignees", "Demo User"),
           TaskField("Time estimate", "1h 30m"),
-          TaskField("Incident No.", "INC2391177"),
+          TaskField("Incident No.", "INC0012346"),
           TaskField("Priority rating", "★★★☆☆"),
         )
         else -> emptyList()
